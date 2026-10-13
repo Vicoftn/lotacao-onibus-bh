@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lotação dos ônibus de BH</title>
+<meta name="description" content="Análise da demanda e da lotação dos ônibus de Belo Horizonte por linha, hora e região, com dados abertos da BHTRANS.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,500&display=swap">
+<style>
+:root{
+  --font-anthropic-sans:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-anthropic-serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --color-bg:#f6f6f3;--color-panel:#ffffff;--color-fg:#1b1b1a;--color-fg-muted:#6b6a64;--color-border-line:#e2e1da;
+  --color-bad:#c4352f;--color-ok:#1d7a3e;--color-warn:#a86700;
+  --cds-surface-popover:#ffffff;--cds-border:#d6d5cd;--cds-shadow-popover:0 4px 16px rgba(20,20,18,.12);--cds-text-secondary:#56554f;
+  --cds-chart-grid:#ecebe5;--cds-chart-axis:#c3c2b7;--cds-chart-reference:#55544e;--cds-chart-muted:#c9c8bf;
+  --series-1:#2a78d6;--series-2:#eb6834;--series-3:#1baf7a;--series-4:#eda100;--series-5:#e87ba4;--series-6:#008300;--series-7:#6250d6;--series-8:#e34948;
+  --cds-gap-xs:4px;--cds-gap-sm:8px;--cds-gap-md:16px;--cds-gap-lg:24px;--cds-gap-xl:40px;
+  --cds-pad-xs:4px;--cds-pad-sm:8px;--cds-pad-md:12px;--cds-pad-lg:20px;--cds-radius:8px;
+  --cds-font-size-caption:.8125rem;--cds-font-size-body:.9375rem;--cds-font-size-heading:1.0625rem;--cds-font-size-title:1.75rem;
+  --cds-dur-slow:.4s;--cds-ease-out:cubic-bezier(.2,.7,.2,1);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --color-bg:#151514;--color-panel:#1e1e1c;--color-fg:#f0efec;--color-fg-muted:#9d9c95;--color-border-line:#33332f;
+  --color-bad:#ef6b62;--color-ok:#5cc47e;--color-warn:#e3a33a;
+  --cds-surface-popover:#262624;--cds-border:#3d3d39;--cds-shadow-popover:0 4px 16px rgba(0,0,0,.5);--cds-text-secondary:#c3c2b7;
+  --cds-chart-grid:#2c2c2a;--cds-chart-axis:#45453f;--cds-chart-reference:#c3c2b7;--cds-chart-muted:#4a4a45;
+  --series-1:#3987e5;--series-2:#d95926;--series-3:#199e70;--series-4:#c98500;--series-5:#d55181;--series-6:#2f9a2f;--series-7:#9085e9;--series-8:#e66767;
+  color-scheme:dark;
+}}
+html,body{margin:0;background:var(--color-bg);color:var(--color-fg);font-family:var(--font-anthropic-sans);font-size:15px;line-height:1.5}
+#dash-root{padding:clamp(16px,4vw,48px) clamp(16px,4vw,48px) 64px}
+.dash-skeleton{color:transparent!important;background:var(--color-border-line);border-radius:6px;animation:skel 1.4s ease-in-out infinite}
+.bh-chart.dash-skeleton,.bh-map.dash-skeleton,.bh-heat.dash-skeleton,.bh-types.dash-skeleton{background:var(--color-border-line);opacity:.5}
+@keyframes skel{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.dash-skeleton{animation:none}}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="dash-shim.js"></script>
+</head>
+<body>
+<main id="dash-root">
+<style>
+.bh{max-width:72rem;margin-inline:auto;font-family:var(--font-anthropic-sans);color:var(--color-fg);display:flex;flex-direction:column;gap:var(--cds-gap-xl)}
+.bh *{box-sizing:border-box}
+.bh-head{display:flex;flex-direction:column;gap:var(--cds-gap-sm);padding-top:var(--cds-pad-sm)}
+.bh-eyebrow{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);letter-spacing:.06em;text-transform:uppercase}
+.bh-title{font-family:var(--font-anthropic-serif);font-weight:400;font-size:clamp(1.7rem,4vw,2.5rem);line-height:1.15;margin:0;text-wrap:balance}
+.bh-lede{font-size:var(--cds-font-size-heading);line-height:1.5;margin:0;max-width:62ch;color:var(--color-fg)}
+.bh-lede b,.bh p b{font-weight:500}
+.bh-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,11rem),1fr));gap:var(--cds-gap-md)}
+.bh-kpi{background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);display:flex;flex-direction:column;gap:var(--cds-gap-xs);min-width:0}
+.bh-kpi.is-key{border-color:var(--cds-chart-reference)}
+.bh-kpi-label{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);min-height:2.6em}
+.bh-kpi-value{font-family:var(--font-anthropic-serif);font-weight:400;font-size:var(--cds-font-size-title);line-height:1.1;font-variant-numeric:tabular-nums}
+.bh-kpi-note{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);line-height:1.4}
+.bh-section{display:flex;flex-direction:column;gap:var(--cds-gap-md)}
+.bh-h2{font-size:var(--cds-font-size-title);font-weight:500;margin:0;text-wrap:balance}
+.bh-intro{margin:0;max-width:68ch;line-height:1.6;color:var(--color-fg)}
+.bh-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr));gap:var(--cds-gap-md)}
+.bh-card{background:var(--color-panel);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-lg);display:flex;flex-direction:column;gap:var(--cds-gap-sm);min-width:0}
+.bh-card h3{font-size:var(--cds-font-size-heading);font-weight:500;margin:0}
+.bh-note{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);margin:0;line-height:1.5}
+.bh-chart{position:relative;width:100%;min-height:240px}
+.bh-chart.sm{min-height:150px}
+.bh-chart svg{display:block;overflow:visible}
+.bh-legend{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm) var(--cds-gap-md);font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.bh-legend button{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:4px;padding:2px 4px}
+.bh-legend button:focus-visible{outline:2px solid var(--cds-chart-reference)}
+.bh-legend button[aria-pressed=false]{opacity:.4}
+.bh-sw{width:10px;height:10px;border-radius:2px;display:inline-block;flex:none}
+.bh-tip{position:absolute;pointer-events:none;background:var(--cds-surface-popover);border:1px solid var(--cds-border);border-radius:var(--cds-radius);box-shadow:var(--cds-shadow-popover);padding:var(--cds-pad-xs) var(--cds-pad-sm);font-size:var(--cds-font-size-caption);line-height:1.5;white-space:nowrap;z-index:5;font-variant-numeric:tabular-nums}
+.bh-tip .t{color:var(--cds-text-secondary)}
+.bh-tip .r{display:flex;align-items:center;gap:6px}
+.bh-tip .v{margin-left:auto;padding-left:12px;font-weight:500}
+.bh-tick{font-size:var(--cds-font-size-caption);fill:var(--color-fg-muted)}
+.bh-lab{font-size:var(--cds-font-size-caption);fill:var(--color-fg)}
+.bh-types{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,15rem),1fr));gap:var(--cds-gap-md)}
+.bh-type-stats{display:flex;flex-wrap:wrap;gap:var(--cds-gap-xs) var(--cds-gap-md);font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);font-variant-numeric:tabular-nums}
+.bh-type-stats b{color:var(--color-fg);font-weight:500}
+.bh-heat-wrap{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:var(--cds-gap-md);align-items:start}
+@media (max-width:860px){.bh-heat-wrap{grid-template-columns:minmax(0,1fr)}}
+.bh-heat{position:relative;width:100%;min-height:600px}
+.bh-heat .row{cursor:pointer}
+.bh-heat .row:focus-visible{outline:none}
+.bh-heat .row:focus-visible .rl{text-decoration:underline}
+.bh-detail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 1rem)}
+.bh-select{font:inherit;font-size:var(--cds-font-size-body);padding:6px 8px;border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg);max-width:100%}
+.bh-chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--cds-gap-sm)}
+.bh-chip{display:flex;flex-direction:column;gap:2px;padding:var(--cds-pad-sm);border-radius:var(--cds-radius);border:1px solid var(--color-border-line);min-width:0}
+.bh-chip span:first-child{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.bh-chip span:last-child{font-size:var(--cds-font-size-heading);font-weight:500;font-variant-numeric:tabular-nums}
+.bh-badge{display:inline-flex;align-items:center;gap:6px;font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.bh-days{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm)}
+.bh-day{font-size:var(--cds-font-size-caption);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:4px 8px;font-variant-numeric:tabular-nums}
+.bh-day b{font-weight:500}
+.bh-tools{display:flex;flex-wrap:wrap;gap:var(--cds-gap-sm);align-items:center;justify-content:space-between}
+.bh-search{font:inherit;padding:6px 10px;border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg);min-width:0;width:16rem;max-width:100%}
+.bh-tablewrap{container-type:inline-size;max-height:34rem;overflow:auto;border:1px solid var(--color-border-line);border-radius:var(--cds-radius)}
+.bh-table{width:100%;border-collapse:collapse;font-size:var(--cds-font-size-caption);font-variant-numeric:tabular-nums}
+.bh-table th{position:sticky;top:0;background:var(--color-panel);text-align:right;font-weight:500;color:var(--color-fg-muted);padding:0;border-bottom:1px solid var(--color-border-line);z-index:1}
+.bh-table th button{all:unset;cursor:pointer;display:block;width:100%;padding:8px 10px;box-sizing:border-box;text-align:inherit}
+.bh-table th button:focus-visible{outline:2px solid var(--cds-chart-reference);outline-offset:-2px}
+.bh-table th:nth-child(-n+3),.bh-table td:nth-child(-n+3){text-align:left}
+.bh-table td.nm{max-width:16rem;overflow:hidden;text-overflow:ellipsis}
+.bh-table td{padding:6px 10px;border-bottom:1px solid var(--color-border-line);text-align:right;white-space:nowrap}
+.bh-table tbody tr{cursor:pointer}
+.bh-table tbody tr:hover{background:var(--color-bg)}
+.bh-table tbody tr.is-sel{background:var(--color-bg);box-shadow:inset 3px 0 0 var(--cds-chart-reference)}
+.bh-bar{display:inline-block;height:6px;border-radius:3px;vertical-align:middle;margin-right:6px}
+@container (max-width:720px){.bh-opt{display:none}}
+.bh-method{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr));gap:var(--cds-gap-md)}
+.bh-method p,.bh-method li{line-height:1.6;margin:0;font-size:var(--cds-font-size-body)}
+.bh-method ul{margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:6px}
+.bh-formula{font-family:var(--font-mono,ui-monospace,monospace);font-size:var(--cds-font-size-caption);background:var(--color-bg);border:1px solid var(--color-border-line);border-radius:var(--cds-radius);padding:var(--cds-pad-sm);line-height:1.6}
+.bh-foot{font-size:var(--cds-font-size-caption);color:var(--color-fg-muted);border-top:1px solid var(--color-border-line);padding-top:var(--cds-pad-md);line-height:1.6}
+.bh-fail{display:flex;align-items:center;justify-content:center;gap:8px;min-height:inherit;height:100%;font-size:var(--cds-font-size-caption);color:var(--color-fg-muted)}
+.bh-fail::before{content:"";width:.375rem;height:.375rem;border-radius:50%;background:var(--color-bad)}
+.bh-city{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:var(--cds-gap-md);align-items:start}
+@media (max-width:900px){.bh-city{grid-template-columns:minmax(0,1fr)}}
+.bh-map{position:relative;width:100%;min-height:520px}
+.bh-map canvas{display:block;width:100%;touch-action:none}
+.bh-ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:var(--cds-gap-sm) var(--cds-gap-md)}
+.bh-ctrl input[type=range]{flex:1 1 12rem;min-width:0;accent-color:var(--cds-chart-reference)}
+.bh-hour{font-family:var(--font-anthropic-serif);font-size:var(--cds-font-size-title);min-width:3.2ch;font-variant-numeric:tabular-nums}
+.bh-btn{font:inherit;font-size:var(--cds-font-size-caption);padding:6px 12px;border:1px solid var(--color-border-line);border-radius:var(--cds-radius);background:var(--color-bg);color:var(--color-fg);cursor:pointer}
+.bh-btn:focus-visible{outline:2px solid var(--cds-chart-reference);outline-offset:2px}
+.bh-btn[aria-pressed=true]{border-color:var(--color-fg);font-weight:500}
+.bh-rank{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.bh-rank li{display:grid;grid-template-columns:1.4rem minmax(0,1fr) auto;gap:4px 8px;align-items:center;font-size:var(--cds-font-size-caption);font-variant-numeric:tabular-nums}
+.bh-rank .n{color:var(--color-fg-muted)}
+.bh-rank .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bh-rank .nm small{color:var(--color-fg-muted);font-size:inherit}
+.bh-rank .bar{grid-column:2/4;height:4px;border-radius:2px}
+.bh-seg{display:inline-flex;flex-wrap:wrap;gap:6px}
+.bh-small-table{width:100%;border-collapse:collapse;font-size:var(--cds-font-size-caption);font-variant-numeric:tabular-nums}
+.bh-small-table th{font-weight:500;color:var(--color-fg-muted);text-align:right;padding:6px 8px;border-bottom:1px solid var(--color-border-line)}
+.bh-small-table td{text-align:right;padding:6px 8px;border-bottom:1px solid var(--color-border-line)}
+.bh-small-table th:first-child,.bh-small-table td:first-child{text-align:left}
+.bh-det-nome{margin:0;font-size:var(--cds-font-size-body);font-weight:500}
+[data-dash-source-state=empty]{color:transparent}
+[data-dash-source-state=refreshing]{opacity:.5;transition:opacity var(--cds-dur-slow)}
+@media (prefers-reduced-motion:no-preference){.bh-anim{animation:bhIn var(--cds-dur-slow) var(--cds-ease-out) both}@keyframes bhIn{from{opacity:.2}to{opacity:1}}}
+</style>
+
+<div class="bh" id="painel">
+  <header class="bh-head" id="topo">
+    <span class="bh-eyebrow">Estudo de transporte coletivo · Belo Horizonte · maio a julho de 2026</span>
+    <h1 class="bh-title">Lotação dos ônibus de BH</h1>
+    <p class="bh-lede" id="resumo">Em um dia útil típico, quem pega ônibus em BH viaja numa viagem com <b class="dash-skeleton" data-source="sistema" data-field="epv_percebida" data-row="0" data-fmt="n1">—</b> embarques, <b class="dash-skeleton" data-source="ganho_percebido" data-field="ganho" data-row="0" data-fmt="pct0">—</b> a mais do que a média por viagem sugere (<b class="dash-skeleton" data-source="sistema" data-field="epv_media" data-row="0" data-fmt="n1">—</b>). Às <span class="dash-skeleton" data-source="sistema" data-field="hora_pico" data-row="0" data-fmt="h">—</span>, a hora mais carregada, saem viagens com <b class="dash-skeleton" data-source="sistema" data-field="conc_pico" data-row="0" data-fmt="pct0">—</b> de toda a demanda do dia.</p>
+  </header>
+
+  <section class="bh-kpis" id="indicadores" aria-label="Indicadores do sistema">
+    <div class="bh-kpi" id="kpi-pax"><span class="bh-kpi-label">Passageiros por dia útil</span><span class="bh-kpi-value dash-skeleton" data-source="sistema" data-field="pax_dia" data-row="0" data-fmt="int">—</span><span class="bh-kpi-note">Embarques registrados na bilhetagem, média de maio e junho</span></div>
+    <div class="bh-kpi" id="kpi-viagens"><span class="bh-kpi-label">Viagens por dia útil</span><span class="bh-kpi-value dash-skeleton" data-source="sistema" data-field="viagens_dia" data-row="0" data-fmt="int">—</span><span class="bh-kpi-note">Viagens com passageiros nas <span data-source="sistema" data-field="linhas_analisadas" data-row="0" data-fmt="int">—</span> linhas analisadas</span></div>
+    <div class="bh-kpi" id="kpi-media"><span class="bh-kpi-label">Embarques por viagem, média</span><span class="bh-kpi-value dash-skeleton" data-source="sistema" data-field="epv_media" data-row="0" data-fmt="n1">—</span><span class="bh-kpi-note">O que o operador vê: passageiros ÷ viagens</span></div>
+    <div class="bh-kpi is-key" id="kpi-percebida"><span class="bh-kpi-label">Lotação percebida</span><span class="bh-kpi-value dash-skeleton" data-source="sistema" data-field="epv_percebida" data-row="0" data-fmt="n1">—</span><span class="bh-kpi-note">O que o passageiro vive: média ponderada pelos próprios passageiros</span></div>
+    <div class="bh-kpi" id="kpi-ipk"><span class="bh-kpi-label">IPK, passageiros por km</span><span class="bh-kpi-value dash-skeleton" data-source="sistema" data-field="ipk" data-row="0" data-fmt="n2">—</span><span class="bh-kpi-note">Indicador de produtividade usado no cálculo de tarifa</span></div>
+    <div class="bh-kpi" id="kpi-fhp"><span class="bh-kpi-label">Fator de hora pico, manhã</span><span class="bh-kpi-value dash-skeleton" data-source="sistema" data-field="fhp_manha" data-row="0" data-fmt="n2">—</span><span class="bh-kpi-note">Perto de 1, a demanda se espalha na hora; perto de 0,25, chega toda junta</span></div>
+  </section>
+
+  <section class="bh-section" id="cidade">
+    <h2 class="bh-h2">O movimento na cidade, hora a hora</h2>
+    <p class="bh-intro">Cada quadrado tem 250 m de lado. A cor mostra quantos passageiros por hora passam ali a bordo, somando todas as linhas cujo trajeto cruza o quadrado. Às 6h, o trecho mais carregado é a <b data-source="corredores" data-field="rua" data-where="hora=6&amp;posicao=1" data-fmt="txt">—</b> (<span data-source="corredores" data-field="regional" data-where="hora=6&amp;posicao=1" data-fmt="txt">—</span>). Arraste o controle ou aperte play para ver o dia passar.</p>
+    <div class="bh-city">
+      <div class="bh-card" id="card-cidade">
+        <div class="bh-ctrl">
+          <span class="bh-hour" id="hora-label" aria-live="polite">6h</span>
+          <input type="range" id="hora-cidade" min="4" max="23" step="1" value="6" aria-label="Hora do dia">
+          <button type="button" class="bh-btn" id="play-cidade" aria-pressed="false">Play</button>
+        </div>
+        <div class="bh-legend" id="leg-cidade"></div>
+        <div class="bh-map dash-skeleton" id="ch-cidade" data-source="grade regionais"></div>
+        <p class="bh-note">Traçados do GTFS da BHTRANS (sentido e itinerário mais frequentes em dia útil). Carga estimada = embarques ÷ fator de rotatividade da linha, aplicada a todo o trajeto.</p>
+      </div>
+      <div class="bh-section">
+        <div class="bh-card" id="card-corredores">
+          <h3>Corredores mais carregados às <span id="hora-corr">6h</span></h3>
+          <p class="bh-note">Trecho de 250 m mais carregado de cada rua, em passageiros por hora (estimativa).</p>
+          <ol class="bh-rank dash-skeleton" id="lista-corredores" data-source="corredores"></ol>
+        </div>
+        <div class="bh-card" id="card-regionais">
+          <h3>Quem acorda primeiro</h3>
+          <p class="bh-note">Fatia de cada regional no movimento da cidade (passageiros × km) às 6h e às 17h. Em Venda Nova, o movimento das 6h é <b data-source="regional_razao" data-field="razao" data-where="regional=Venda%20Nova" data-fmt="x1">—</b> o das 17h; no Norte, <b data-source="regional_razao" data-field="razao" data-where="regional=Norte" data-fmt="x1">—</b>. Na Centro-Sul, <b data-source="regional_razao" data-field="razao" data-where="regional=Centro-Sul" data-fmt="x1">—</b>.</p>
+          <div class="bh-legend" id="leg-reg"></div>
+          <div class="bh-chart dash-skeleton" id="ch-reg" data-source="regional_hora" style="min-height:300px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="bh-section" id="dia">
+    <h2 class="bh-h2">Um dia no sistema</h2>
+    <p class="bh-intro">A demanda tem dois picos, e o da manhã é mais alto e mais estreito que o da tarde. Nas férias de julho a curva mantém o formato, só mais baixa. No fim de semana, os picos quase desaparecem.</p>
+    <div class="bh-card" id="card-perfil">
+      <h3>Passageiros por hora de saída da viagem</h3>
+      <p class="bh-note">Média por dia de cada tipo. Toque na legenda para esconder uma série.</p>
+      <div class="bh-legend" id="leg-perfil" data-source="perfil_horario"></div>
+      <div class="bh-chart dash-skeleton" id="ch-perfil" data-source="perfil_horario" style="min-height:280px"></div>
+    </div>
+    <div class="bh-grid">
+      <div class="bh-card" id="card-od">
+        <h3>Índice oferta × demanda</h3>
+        <p class="bh-note">Fatia da demanda do dia na hora ÷ fatia das viagens do dia na hora. Acima de 1, faltam ônibus para a demanda; abaixo de 1, sobram. Às 6h o índice chega a <b data-source="oferta_demanda" data-field="indice" data-where="hora=6" data-fmt="n2">—</b>.</p>
+        <div class="bh-legend"><span class="bh-badge"><span class="bh-sw" id="sw-od-pos"></span>Demanda acima da oferta</span><span class="bh-badge"><span class="bh-sw" id="sw-od-neg"></span>Oferta acima da demanda</span></div>
+        <div class="bh-chart dash-skeleton" id="ch-od" data-source="oferta_demanda"></div>
+      </div>
+      <div class="bh-card" id="card-fhp">
+        <h3>A hora de pico em blocos de 15 minutos</h3>
+        <p class="bh-note">Faixas destacadas: hora mais carregada da manhã (FHP <b data-source="sistema" data-field="fhp_manha" data-row="0" data-fmt="n2">—</b>, a partir de <span data-source="sistema" data-field="fhp_manha_inicio" data-row="0" data-fmt="hora">—</span>) e da tarde (FHP <b data-source="sistema" data-field="fhp_tarde" data-row="0" data-fmt="n2">—</b>, a partir de <span data-source="sistema" data-field="fhp_tarde_inicio" data-row="0" data-fmt="hora">—</span>).</p>
+        <div class="bh-chart dash-skeleton" id="ch-fhp" data-source="quarto_hora sistema"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="bh-section" id="media">
+    <h2 class="bh-h2">A média por viagem esconde a lotação</h2>
+    <p class="bh-intro">Muitas viagens vazias puxam a média para baixo, mas quase ninguém está nelas. <b data-source="faixas_carga" data-field="pct_viagens" data-where="faixa=0–20" data-fmt="pct0">—</b> das viagens levam até 20 embarques e carregam só <b data-source="faixas_carga" data-field="pct_passageiros" data-where="faixa=0–20" data-fmt="pct0">—</b> dos passageiros. Na outra ponta, <b data-source="faixas_extremos" data-field="pct_passageiros_80" data-row="0" data-fmt="pct0">—</b> dos passageiros estão nas <b data-source="faixas_extremos" data-field="pct_viagens_80" data-row="0" data-fmt="pct0">—</b> de viagens com mais de 80 embarques.</p>
+    <div class="bh-card" id="card-faixas">
+      <h3>Viagens e passageiros por faixa de embarques na viagem</h3>
+      <p class="bh-note">Cada barra soma 100%. Mesmo número de viagens, distribuição de pessoas muito diferente.</p>
+      <div class="bh-legend" id="leg-faixas" data-source="faixas_carga"></div>
+      <div class="bh-chart sm dash-skeleton" id="ch-faixas" data-source="faixas_carga"></div>
+    </div>
+  </section>
+
+  <section class="bh-section" id="ocupacao">
+    <h2 class="bh-h2">Quantas pessoas estão a bordo no trecho mais cheio</h2>
+    <p class="bh-intro">Embarque não é ocupação: numa viagem, gente desce e outra sobe. A pesquisa de sobe-e-desce da BHTRANS mede o fator de rotatividade de cada linha, que é o total de passageiros da viagem dividido pela maior quantidade a bordo ao mesmo tempo. Dividindo os embarques de 2026 por esse fator, o passageiro típico viaja num ônibus que chega a <b data-source="ocupacao_sistema" data-field="carga_percebida" data-row="0" data-fmt="n1">—</b> pessoas a bordo no trecho mais cheio. No pico da manhã, <b data-source="carga_limiar" data-field="pct" data-where="periodo=Pico%20da%20manh%C3%A3%20(5h%E2%80%937h)&amp;limite=40" data-fmt="pct0">—</b> dos passageiros estão em viagens que passam de 40 pessoas a bordo.</p>
+    <div class="bh-kpis">
+      <div class="bh-kpi"><span class="bh-kpi-label">Carga máxima por viagem, média</span><span class="bh-kpi-value dash-skeleton" data-source="ocupacao_sistema" data-field="carga_media_viagem" data-row="0" data-fmt="n1">—</span><span class="bh-kpi-note">Pessoas a bordo no trecho mais cheio, estimativa</span></div>
+      <div class="bh-kpi is-key"><span class="bh-kpi-label">Carga máxima percebida</span><span class="bh-kpi-value dash-skeleton" data-source="ocupacao_sistema" data-field="carga_percebida" data-row="0" data-fmt="n1">—</span><span class="bh-kpi-note">A mesma conta, ponderada pelos passageiros</span></div>
+      <div class="bh-kpi"><span class="bh-kpi-label">Fator de rotatividade do sistema</span><span class="bh-kpi-value dash-skeleton" data-source="ocupacao_sistema" data-field="fator_sistema" data-row="0" data-fmt="n2">—</span><span class="bh-kpi-note">Em média, cada lugar é ocupado por essa quantidade de pessoas na viagem</span></div>
+      <div class="bh-kpi"><span class="bh-kpi-label">Passageiros com fator da própria linha</span><span class="bh-kpi-value dash-skeleton" data-source="ocupacao_sistema" data-field="pct_pax_fator_proprio" data-row="0" data-fmt="pct0">—</span><span class="bh-kpi-note">O resto usa o fator médio do sistema</span></div>
+    </div>
+    <div class="bh-grid">
+      <div class="bh-card" id="card-hist">
+        <h3>Passageiros por carga máxima estimada da viagem</h3>
+        <div class="bh-seg" id="seg-periodo" role="group" aria-label="Período"></div>
+        <div class="bh-ctrl"><label class="bh-note" for="limite">Referência de lotação</label><input type="range" id="limite" min="20" max="100" step="5" value="40"><span class="bh-hour" id="limite-label" style="font-size:var(--cds-font-size-heading)">40</span></div>
+        <p class="bh-note" id="hist-texto"><b id="hist-pct" data-source="carga_limiar" data-field="pct" data-fmt="pct1">—</b> dos passageiros deste período estão em viagens com <span id="hist-lim">40</span> ou mais pessoas a bordo no trecho mais cheio.</p>
+        <div class="bh-chart dash-skeleton" id="ch-hist" data-source="carga_hist"></div>
+      </div>
+      <div class="bh-card" id="card-topcarga">
+        <h3>Linhas mais cheias na sua hora de pico</h3>
+        <p class="bh-note">Carga máxima estimada da viagem média na hora de maior demanda de cada linha.</p>
+        <div class="bh-chart dash-skeleton" id="ch-topcarga" data-source="linhas" style="min-height:420px"></div>
+      </div>
+    </div>
+    <div class="bh-card" id="card-servico">
+      <h3>Por tipo de serviço</h3>
+      <p class="bh-note">Classificação da BHTRANS na pesquisa de sobe-e-desce. Troncais e diametrais cruzam a cidade; alimentadoras levam aos terminais e estações.</p>
+      <div class="bh-tablewrap" style="max-height:none">
+        <table class="bh-small-table" id="tab-servico" data-source="por_servico" data-row-key="servico">
+          <thead><tr><th data-field="servico">Serviço</th><th data-field="linhas">Linhas</th><th data-field="pax_dia">Pass./dia útil</th><th data-field="epv">Emb./viagem</th><th data-field="carga_pico">Carga no pico (mediana)</th><th data-field="fator">Fator (mediana)</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="bh-section" id="tipologia">
+    <h2 class="bh-h2">Três comportamentos de linha</h2>
+    <p class="bh-intro">Agrupei as <span data-source="sistema" data-field="linhas_tipologia" data-row="0" data-fmt="int">—</span> linhas com pelo menos mil passageiros por dia útil pelo formato da curva horária (cada hora como fatia do dia), com k-means. Os grupos separam linhas de bairro que esvaziam cedo, linhas que enchem à tarde e o padrão pendular clássico.</p>
+    <div class="bh-types" id="tipos" data-source="tipologia_perfil tipologia_resumo"></div>
+  </section>
+
+  <section class="bh-section" id="mapa">
+    <h2 class="bh-h2">Mapa de calor: embarques por viagem, linha a linha</h2>
+    <p class="bh-intro">As 40 linhas de maior demanda, agrupadas por comportamento. Cada célula é a média de embarques por viagem que sai naquela hora. Clique numa linha para ver o detalhe.</p>
+    <div class="bh-heat-wrap">
+      <div class="bh-card" id="card-heat">
+        <div class="bh-legend" id="leg-heat"></div>
+        <div class="bh-heat dash-skeleton" id="ch-heat" data-source="linhas linhas_hora"></div>
+      </div>
+      <div class="bh-card bh-detail" id="detalhe">
+        <label class="bh-note" for="sel-linha">Linha selecionada</label>
+        <select class="bh-select" id="sel-linha" data-source="linhas" aria-label="Escolher linha"></select>
+        <p class="bh-det-nome" id="det-nome" data-source="linhas" data-field="nome">—</p>
+        <span class="bh-badge" id="det-tipo"><span class="bh-sw" id="det-sw"></span><span id="det-tipo-nome" data-source="linhas" data-field="tipologia">—</span></span>
+        <div class="bh-chips">
+          <div class="bh-chip"><span>Passageiros/dia útil</span><span id="det-pax" data-source="linhas" data-field="pax_dia" data-fmt="int">—</span></div>
+          <div class="bh-chip"><span>Viagens/dia útil</span><span id="det-viagens" data-source="linhas" data-field="viagens_dia" data-fmt="n1">—</span></div>
+          <div class="bh-chip"><span>Embarques/viagem</span><span id="det-epv" data-source="linhas" data-field="epv" data-fmt="n1">—</span></div>
+          <div class="bh-chip"><span>Lotação percebida</span><span id="det-perc" data-source="linhas" data-field="epv_percebida" data-fmt="n1">—</span></div>
+          <div class="bh-chip"><span>IPK</span><span id="det-ipk" data-source="linhas" data-field="ipk" data-fmt="n2">—</span></div>
+          <div class="bh-chip"><span>Efeito das férias</span><span id="det-ferias" data-source="linhas" data-field="delta_ferias" data-fmt="spct">—</span></div>
+          <div class="bh-chip"><span>Carga no pico (est.)</span><span id="det-carga" data-source="linhas" data-field="carga_pico" data-fmt="n1">—</span></div>
+          <div class="bh-chip"><span>Tipo de serviço</span><span id="det-serv" data-source="linhas" data-field="servico">—</span></div>
+        </div>
+        <h3>Passageiros por hora</h3>
+        <div class="bh-legend" id="leg-det"></div>
+        <div class="bh-chart" id="ch-det" data-source="linhas_hora" style="min-height:200px"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="bh-section" id="ferias">
+    <h2 class="bh-h2">O que as férias escolares revelam</h2>
+    <p class="bh-intro">Nos dias úteis de férias de julho a demanda diária cai <b data-source="ferias_total" data-field="delta" data-row="0" data-fmt="pctabs">—</b>. A queda não é uniforme: chega a <b data-source="efeito_ferias" data-field="delta" data-where="hora=12" data-fmt="pctabs">—</b> às 12h e <b data-source="efeito_ferias" data-field="delta" data-where="hora=21" data-fmt="pctabs">—</b> às 21h, horários que coincidem com a troca do turno escolar da manhã para a tarde e com as aulas noturnas. É a assinatura dos estudantes na rede.</p>
+    <div class="bh-card" id="card-ferias">
+      <h3>Variação da demanda nas férias, por hora</h3>
+      <p class="bh-note">Dias úteis de férias de julho comparados aos dias úteis de maio e junho.</p>
+      <div class="bh-chart dash-skeleton" id="ch-ferias" data-source="efeito_ferias"></div>
+    </div>
+  </section>
+
+  <section class="bh-section" id="calendario">
+    <h2 class="bh-h2">Calendário de demanda</h2>
+    <p class="bh-intro">Cada quadrado é um dia, do mais claro ao mais escuro conforme o total de passageiros. Feriados, pontes e o jogo do Brasil na Copa aparecem como dias úteis apagados.</p>
+    <div class="bh-card" id="card-cal">
+      <div class="bh-chart sm dash-skeleton" id="ch-cal" data-source="calendario" style="min-height:190px"></div>
+      <div class="bh-days" id="dias-especiais" data-source="calendario"></div>
+    </div>
+  </section>
+
+  <section class="bh-section" id="ranking">
+    <h2 class="bh-h2">Todas as linhas</h2>
+    <p class="bh-intro">Ordene por qualquer coluna. Clique numa linha da tabela para abrir o detalhe no mapa de calor.</p>
+    <div class="bh-card" id="card-tabela">
+      <div class="bh-tools">
+        <input class="bh-search" id="busca" type="search" placeholder="Buscar linha, bairro ou comportamento" aria-label="Buscar linha">
+        <span class="bh-note" id="contagem"></span>
+      </div>
+      <div class="bh-tablewrap">
+        <table class="bh-table" id="tabela" data-source="linhas" data-row-key="linha">
+          <thead><tr>
+            <th data-field="linha"><button type="button" data-k="linha">Linha</button></th>
+            <th data-field="nome" class="bh-opt"><button type="button" data-k="nome">Nome</button></th>
+            <th data-field="tipologia" class="bh-opt"><button type="button" data-k="tipologia">Comportamento</button></th>
+            <th data-field="pax_dia"><button type="button" data-k="pax_dia">Pass./dia</button></th>
+            <th data-field="viagens_dia" class="bh-opt"><button type="button" data-k="viagens_dia">Viagens/dia</button></th>
+            <th data-field="epv"><button type="button" data-k="epv">Emb./viagem</button></th>
+            <th data-field="epv_percebida"><button type="button" data-k="epv_percebida">Percebida</button></th>
+            <th data-field="ipk" class="bh-opt"><button type="button" data-k="ipk">IPK</button></th>
+            <th data-field="hora_pico" class="bh-opt"><button type="button" data-k="hora_pico">Pico</button></th>
+            <th data-field="conc_pico" class="bh-opt"><button type="button" data-k="conc_pico">% no pico</button></th>
+            <th data-field="cv_pico" class="bh-opt"><button type="button" data-k="cv_pico">Variab. pico</button></th>
+            <th data-field="carga_pico" class="bh-opt"><button type="button" data-k="carga_pico">Carga pico (est.)</button></th>
+            <th data-field="delta_ferias"><button type="button" data-k="delta_ferias">Férias</button></th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="bh-section" id="metodo">
+    <h2 class="bh-h2">Método e limitações</h2>
+    <div class="bh-method">
+      <div class="bh-card">
+        <h3>Dados</h3>
+        <ul>
+          <li>Mapa de Controle Operacional (MCO) da BHTRANS, Portal de Dados Abertos da PBH, licença CC-BY. Um registro por viagem, com linha, horário de saída e total de usuários da bilhetagem eletrônica.</li>
+          <li>Período: maio, junho e julho de 2026. Dia útil típico = <span data-source="sistema" data-field="dias_uteis" data-row="0" data-fmt="int">—</span> dias úteis normais de maio e junho; férias = <span data-source="sistema" data-field="dias_ferias" data-row="0" data-fmt="int">—</span> dias úteis classificados como férias de julho.</li>
+          <li>Só viagens com passageiros (pontos de controle 1 e 2). Viagens ociosas e de transferência saem da conta.</li>
+          <li>Traçados e nomes das linhas: GTFS da BHTRANS. Fator de rotatividade: pesquisas de sobe-e-desce da BHTRANS em dias úteis (<span data-source="ocupacao_sistema" data-field="pesquisas" data-row="0" data-fmt="int">—</span> viagens pesquisadas entre <span data-source="ocupacao_sistema" data-field="ano_min" data-row="0" data-fmt="ano">—</span> e <span data-source="ocupacao_sistema" data-field="ano_max" data-row="0" data-fmt="ano">—</span>). Limites das regionais: PBH, 2025.</li>
+          <li>Excluí <span data-source="sistema" data-field="linhas_excluidas" data-row="0" data-fmt="int">—</span> linhas com mais da metade das viagens zeradas. São linhas cujo embarque acontece nas estações do BRT MOVE e do BHBUS, que o MCO não registra por viagem.</li>
+        </ul>
+      </div>
+      <div class="bh-card">
+        <h3>Métricas</h3>
+        <div class="bh-formula">Embarques por viagem = Σ passageiros ÷ nº de viagens<br>Lotação percebida = Σ (passageiros²) ÷ Σ passageiros<br>IPK = Σ passageiros ÷ Σ km percorridos<br>FHP = volume da hora ÷ (4 × maior volume de 15 min)<br>Índice O×D = % da demanda na hora ÷ % das viagens na hora<br>Variabilidade = desvio-padrão ÷ média dos embarques por viagem na hora de pico, entre dias úteis<br>Fator de rotatividade = Σ passageiros da viagem ÷ Σ maior carga a bordo (por linha e sentido)<br>Carga máxima estimada = embarques da viagem ÷ fator da linha<br>Mapa = Σ carga por hora das linhas cujo trajeto cruza o quadrado de 250 m</div>
+        <p class="bh-note">A lotação percebida responde à pergunta "em média, quantas pessoas embarcaram na viagem de cada passageiro?". Ela pesa cada viagem pelo número de pessoas a bordo, como o passageiro sente.</p>
+      </div>
+      <div class="bh-card">
+        <h3>Limitações</h3>
+        <ul>
+          <li>Embarques por viagem não é ocupação simultânea: numa viagem longa, gente desce e sobe. A base não traz capacidade dos veículos nem contagem a bordo.</li>
+          <li>O horário é o de saída da viagem no ponto de controle, não o do embarque de cada pessoa.</li>
+          <li>Gratuidades sem validação e falhas de catraca podem subestimar viagens isoladas.</li>
+          <li>O fator de rotatividade vem de pesquisas antigas, e o mapa espalha a carga máxima por todo o trajeto. Os valores do mapa são um teto e servem para comparar lugares e horas, não como contagem exata.</li>
+          <li>As linhas troncais do MOVE ficam fora (sem dados por viagem), então os corredores Antônio Carlos e Cristiano Machado aparecem menos carregados do que são.</li>
+          <li>A mesma metodologia se aplica a Curitiba assim que a URBS disponibilizar os dados de bilhetagem por viagem.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="bh-foot">Projeto de Vicente André · Ciência da Computação, PUCPR. Análise em Python (pandas, scikit-learn, shapely e pyproj) sobre cerca de 2,4 milhões de registros de viagem e o GTFS da cidade; visualização em D3 e Canvas. Fontes: BHTRANS / Prefeitura de Belo Horizonte, dados abertos: Mapa de Controle Operacional, GTFS, pesquisa de embarque e desembarque e limites das regionais.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+const loc = d3.formatLocale({decimal:',', thousands:'.', grouping:[3], currency:['R$','']});
+const F = {
+  int: loc.format(',.0f'), n1: loc.format(',.1f'), n2: loc.format(',.2f'),
+  pct0: loc.format('.0%'), pct1: loc.format('.1%'),
+  spct: v => (v>0?'+':v<0?'−':'') + loc.format('.0%')(Math.abs(v)),
+  pctabs: v => loc.format('.0%')(Math.abs(v)),
+  hora: v => String(v).replace(':00','h').replace(/^0/,'').replace(/h$/,'h'),
+  h: v => v + 'h',
+  x1: v => loc.format(',.1f')(v) + '×',
+  ano: v => String(v)
+};
+const fmtHora = s => { const [h,m] = String(s).split(':'); return (+h) + 'h' + (m && m !== '00' ? m : ''); };
+F.hora = fmtHora;
+const GRUPOS = ['Dia útil (maio–jun)','Férias de julho','Sábado','Domingo e feriado'];
+const TIPOS = ['Matinal concentrada','Vespertina','Pendular de dois picos'];
+const TIPO_TXT = {
+  'Matinal concentrada':'Lotam antes das 7h e esvaziam no resto do dia. Sugere deslocamento casa–trabalho que começa muito cedo.',
+  'Vespertina':'O pico maior fica entre 15h e 18h. Sugere linhas mais usadas na volta para casa ou por escolas e comércio à tarde.',
+  'Pendular de dois picos':'Ida de manhã e volta à tarde, com entrepico baixo. O padrão da maioria da demanda.'
+};
+const HRS = d3.range(4,24);
+const $ = s => document.querySelector(s);
+const st = id => dash.data(id).status;
+const rowsOf = id => { const d = dash.data(id); return d.status === 'ok' ? (Array.isArray(d.data) ? d.data : (d.data && d.data.rows) || []) : null; };
+
+dash.calc('oferta_demanda', {
+  title: 'Índice oferta × demanda por hora',
+  description: 'Fatia da demanda diária na hora dividida pela fatia das viagens diárias na hora, no dia útil típico.',
+  inputs: ['perfil_horario'],
+  fn: (perfil_horario) => {
+    const u = perfil_horario.filter(r => r.grupo === 'Dia útil (maio–jun)');
+    const P = d3.sum(u, r => +r.pax), V = d3.sum(u, r => +r.viagens);
+    return u.filter(r => +r.viagens > 0).map(r => ({hora: +r.hora, indice: Math.round(((+r.pax / P) / (+r.viagens / V)) * 1000) / 1000}));
+  }
+});
+dash.calc('efeito_ferias', {
+  title: 'Efeito das férias por hora',
+  description: 'Passageiros por hora nos dias de férias de julho ÷ dia útil típico de maio e junho, menos 1.',
+  inputs: ['perfil_horario'],
+  fn: (perfil_horario) => {
+    const u = new Map(perfil_horario.filter(r => r.grupo === 'Dia útil (maio–jun)').map(r => [+r.hora, +r.pax]));
+    return perfil_horario.filter(r => r.grupo === 'Férias de julho' && +r.hora >= 4)
+      .map(r => ({hora: +r.hora, delta: Math.round((+r.pax / u.get(+r.hora) - 1) * 1000) / 1000}));
+  }
+});
+dash.calc('ferias_total', {
+  title: 'Efeito das férias no dia',
+  description: 'Total de passageiros do dia de férias ÷ total do dia útil típico, menos 1.',
+  inputs: ['perfil_horario'],
+  fn: (perfil_horario) => {
+    const s = g => d3.sum(perfil_horario.filter(r => r.grupo === g), r => +r.pax);
+    return [{delta: Math.round((s('Férias de julho') / s('Dia útil (maio–jun)') - 1) * 1000) / 1000}];
+  }
+});
+dash.calc('ganho_percebido', {
+  title: 'Lotação percebida acima da média',
+  description: 'Lotação percebida ÷ embarques médios por viagem, menos 1.',
+  inputs: ['sistema'],
+  fn: (sistema) => [{ganho: Math.round((+sistema[0].epv_percebida / +sistema[0].epv_media - 1) * 1000) / 1000}]
+});
+dash.calc('faixas_extremos', {
+  title: 'Viagens com mais de 80 embarques',
+  description: 'Soma das faixas 81–100 e 100+ em viagens e em passageiros.',
+  inputs: ['faixas_carga'],
+  fn: (faixas_carga) => {
+    const top = faixas_carga.filter(r => r.faixa === '81–100' || r.faixa === '100+');
+    return [{pct_viagens_80: Math.round(d3.sum(top, r => +r.pct_viagens) * 1000) / 1000, pct_passageiros_80: Math.round(d3.sum(top, r => +r.pct_passageiros) * 1000) / 1000}];
+  }
+});
+
+const probe = document.createElement('span'); probe.style.display = 'none'; document.getElementById('painel').appendChild(probe);
+const css = c => { probe.style.color = ''; probe.style.color = c; return getComputedStyle(probe).color; };
+const C = () => dash.colors;
+const measure = (() => { const cx = document.createElement('canvas').getContext('2d'); return (t, px) => { cx.font = (px||12) + 'px sans-serif'; return cx.measureText(String(t)).width; }; })();
+
+function parseWhere(w){ const o = {}; String(w).split('&').forEach(p => { const [k,v] = p.split('='); o[decodeURIComponent(k)] = decodeURIComponent(v ?? ''); }); return o; }
+function fillMarks(){
+  document.querySelectorAll('#painel [data-fmt][data-source]').forEach(el => {
+    if (el.closest('#detalhe') || el.id === 'hist-pct') return;
+    const ds = el.dataset.source, rows = rowsOf(ds);
+    if (!rows) { if (st(ds) === 'error') el.textContent = '—'; return; }
+    let row = null;
+    if (el.dataset.row != null) row = rows[+el.dataset.row];
+    else if (el.dataset.where) { const w = parseWhere(el.dataset.where); row = rows.find(r => Object.keys(w).every(k => String(r[k]) === w[k])); }
+    el.classList.remove('dash-skeleton');
+    const v = row ? row[el.dataset.field] : null;
+    const fm = el.dataset.fmt;
+    el.textContent = v == null ? '—' : (fm === 'txt' || !F[fm] ? String(v) : F[fm](typeof v === 'string' && fm === 'hora' ? v : +v));
+  });
+}
+function fail(el){ el.classList.remove('dash-skeleton'); el.replaceChildren(); const d = document.createElement('div'); d.className = 'bh-fail'; d.textContent = 'Failed to load'; el.appendChild(d); }
+function ready(el, ids){
+  const s = ids.map(st);
+  if (s.some(x => x === 'error' || x === 'missing' || x === 'declined')) { fail(el); return false; }
+  if (s.some(x => x !== 'ok')) { el.classList.add('dash-skeleton'); el.replaceChildren(); return false; }
+  el.classList.remove('dash-skeleton'); return true;
+}
+function tipBox(host){ let t = host.querySelector(':scope > .bh-tip'); if (!t) { t = document.createElement('div'); t.className = 'bh-tip'; t.hidden = true; host.appendChild(t); } return t; }
+function showTip(host, tip, title, lines, x, y){
+  tip.replaceChildren();
+  const h = document.createElement('div'); h.className = 't'; h.textContent = title; tip.appendChild(h);
+  lines.forEach(l => { const r = document.createElement('div'); r.className = 'r';
+    if (l.c) { const s = document.createElement('span'); s.className = 'bh-sw'; s.style.background = l.c; r.appendChild(s); }
+    const n = document.createElement('span'); n.textContent = l.n; r.appendChild(n);
+    const v = document.createElement('span'); v.className = 'v'; v.textContent = l.v; r.appendChild(v); tip.appendChild(r); });
+  tip.hidden = false;
+  const W = host.clientWidth, tw = tip.offsetWidth, th = tip.offsetHeight;
+  let left = x + 14; if (left + tw > W) left = x - tw - 14; if (left < 0) left = 0;
+  let top = y - th - 10; if (top < 0) top = y + 14;
+  tip.style.left = left + 'px'; tip.style.top = top + 'px';
+}
+function svgIn(el, w, h){ el.querySelectorAll('svg').forEach(s => s.remove()); return d3.select(el).append('svg').attr('width','100%').attr('viewBox',`0 0 ${w} ${h}`).attr('preserveAspectRatio','xMinYMin meet').attr('role','img'); }
+function xAxisHours(g, x, y0, w){
+  const step = w < 420 ? 4 : 2;
+  HRS.filter(h => h % step === 0).forEach(h => g.append('text').attr('class','bh-tick').attr('x', x(h)).attr('y', y0 + 16).attr('text-anchor','middle').text(h + 'h'));
+}
+
+/* ---------- linhas multi-série ---------- */
+function lineChart(el, series, opt){
+  const w = Math.max(el.clientWidth, 280), h = opt.height || 260;
+  const vis = series.filter(s => !s.hidden);
+  const ymax = d3.max(vis.length ? vis : series, s => d3.max(s.values, d => d.y)) || 1;
+  const y = d3.scaleLinear([0, ymax], [h - 26, 10]).nice(4);
+  const ticks = y.ticks(4);
+  const ml = d3.max(ticks, t => measure(opt.yFmt(t))) + 10;
+  const x = d3.scaleLinear([4, 23], [ml, w - 12]);
+  const svg = svgIn(el, w, h).attr('aria-label', opt.label);
+  const g = svg.append('g');
+  ticks.forEach(t => { g.append('line').attr('x1', ml).attr('x2', w - 12).attr('y1', y(t)).attr('y2', y(t)).attr('stroke','var(--cds-chart-grid)');
+    g.append('text').attr('class','bh-tick').attr('x', ml - 8).attr('y', y(t) + 4).attr('text-anchor','end').text(opt.yFmt(t)); });
+  g.append('line').attr('x1', ml).attr('x2', w - 12).attr('y1', y(0)).attr('y2', y(0)).attr('stroke','var(--cds-chart-axis)');
+  xAxisHours(g, x, h - 26, w);
+  const ln = d3.line().x(d => x(d.x)).y(d => y(d.y));
+  vis.forEach(s => g.append('path').attr('d', ln(s.values)).attr('fill','none').attr('stroke', s.color).attr('stroke-width', s.width || 2).attr('stroke-linejoin','round').attr('stroke-linecap','round').attr('stroke-dasharray', s.dash || null));
+  const rule = g.append('line').attr('y1', 10).attr('y2', h - 26).attr('stroke','var(--cds-chart-reference)').attr('opacity', 0);
+  const dots = g.append('g');
+  const tip = tipBox(el);
+  svg.append('rect').attr('x', ml).attr('y', 0).attr('width', w - 12 - ml).attr('height', h).attr('fill','transparent')
+    .on('pointermove', ev => {
+      const [px] = d3.pointer(ev); const hr = Math.max(4, Math.min(23, Math.round(x.invert(px))));
+      rule.attr('x1', x(hr)).attr('x2', x(hr)).attr('opacity', 1); dots.selectAll('*').remove();
+      const lines = [];
+      vis.forEach(s => { const p = s.values.find(d => d.x === hr); if (!p) return;
+        dots.append('circle').attr('cx', x(hr)).attr('cy', y(p.y)).attr('r', 4).attr('fill', s.color).attr('stroke','var(--color-panel)').attr('stroke-width', 2);
+        lines.push({c: vis.length > 1 ? s.color : null, n: s.name, v: opt.yFmt(p.y)}); });
+      const r = el.getBoundingClientRect(), sr = svg.node().getBoundingClientRect();
+      showTip(el, tip, hr + 'h às ' + hr + 'h59', lines, x(hr) * sr.width / w, d3.pointer(ev, el)[1]);
+    })
+    .on('pointerleave', () => { rule.attr('opacity', 0); dots.selectAll('*').remove(); tip.hidden = true; });
+}
+
+/* ---------- barras divergentes por hora ---------- */
+function divBars(el, rows, opt){
+  const w = Math.max(el.clientWidth, 280), h = opt.height || 220;
+  const ext = d3.extent(rows, r => r.v - opt.base);
+  const lo = Math.min(0, ext[0]), hi = Math.max(0, ext[1]);
+  const y = d3.scaleLinear([opt.base + lo, opt.base + hi], [h - 26, 10]).nice(4);
+  const ticks = y.ticks(4);
+  const ml = d3.max(ticks, t => measure(opt.fmt(t))) + 10;
+  const x = d3.scaleBand(HRS, [ml, w - 8]).padding(0.25);
+  const svg = svgIn(el, w, h).attr('aria-label', opt.label);
+  const g = svg.append('g');
+  ticks.forEach(t => { g.append('line').attr('x1', ml).attr('x2', w - 8).attr('y1', y(t)).attr('y2', y(t)).attr('stroke','var(--cds-chart-grid)');
+    g.append('text').attr('class','bh-tick').attr('x', ml - 8).attr('y', y(t) + 4).attr('text-anchor','end').text(opt.fmt(t)); });
+  const tip = tipBox(el);
+  rows.forEach(r => {
+    const y0 = y(opt.base), y1 = y(r.v), top = Math.min(y0, y1), hh = Math.max(1, Math.abs(y1 - y0));
+    const bw = Math.min(24, x.bandwidth());
+    g.append('rect').attr('x', x(r.hora) + (x.bandwidth() - bw) / 2).attr('y', top).attr('width', bw).attr('height', hh).attr('rx', 3)
+      .attr('fill', r.v >= opt.base ? opt.pos : opt.neg)
+      .on('pointermove', ev => { const [px, py] = d3.pointer(ev, el); showTip(el, tip, r.hora + 'h', [{n: opt.name, v: opt.fmt(r.v)}], px, py); })
+      .on('pointerleave', () => tip.hidden = true);
+  });
+  g.append('line').attr('x1', ml).attr('x2', w - 8).attr('y1', y(opt.base)).attr('y2', y(opt.base)).attr('stroke','var(--cds-chart-axis)');
+  const xs = d3.scaleLinear([4, 23], [x(4) + x.bandwidth() / 2, x(23) + x.bandwidth() / 2]);
+  xAxisHours(g, xs, h - 26, w);
+}
+
+/* ---------- 1. perfil horário ---------- */
+const hidden = new Set();
+function drawPerfil(){
+  const el = $('#ch-perfil'), leg = $('#leg-perfil');
+  if (!ready(el, ['perfil_horario'])) { leg.replaceChildren(); return; }
+  const rows = rowsOf('perfil_horario');
+  const series = GRUPOS.map((g, i) => ({name: g, color: C()[i], dash: i === 1 ? '6 4' : null, hidden: hidden.has(g),
+    values: rows.filter(r => r.grupo === g && +r.hora >= 4).map(r => ({x: +r.hora, y: +r.pax}))}));
+  leg.replaceChildren(...series.map(s => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(!s.hidden));
+    const sw = document.createElement('span'); sw.className = 'bh-sw'; sw.style.background = s.color; if (s.dash) { sw.style.background = 'transparent'; sw.style.borderTop = '2px dashed ' + s.color; sw.style.height = '0'; sw.style.width = '14px'; }
+    const t = document.createElement('span'); t.textContent = s.name; b.append(sw, t);
+    b.addEventListener('click', () => { hidden.has(s.name) ? hidden.delete(s.name) : hidden.add(s.name); if (hidden.size === GRUPOS.length) hidden.delete(s.name); drawPerfil(); });
+    return b; }));
+  lineChart(el, series, {height: 280, yFmt: v => loc.format(',.0f')(v), label: 'Passageiros por hora em dia útil, férias, sábado e domingo'});
+}
+
+/* ---------- 2. oferta x demanda ---------- */
+function drawOD(){
+  const el = $('#ch-od'); $('#sw-od-pos').style.background = C()[1]; $('#sw-od-neg').style.background = C()[0];
+  if (!ready(el, ['oferta_demanda'])) return;
+  const rows = rowsOf('oferta_demanda').filter(r => r.hora >= 4).map(r => ({hora: r.hora, v: r.indice}));
+  divBars(el, rows, {base: 1, fmt: F.n2, pos: C()[1], neg: C()[0], name: 'Índice O×D', label: 'Índice oferta versus demanda por hora'});
+}
+
+/* ---------- 3. quartos de hora + FHP ---------- */
+function drawFHP(){
+  const el = $('#ch-fhp');
+  if (!ready(el, ['quarto_hora','sistema'])) return;
+  const rows = rowsOf('quarto_hora').filter(r => r.horario >= '04:00');
+  const s = rowsOf('sistema')[0];
+  const w = Math.max(el.clientWidth, 280), h = 220;
+  const y = d3.scaleLinear([0, d3.max(rows, r => +r.pax)], [h - 26, 10]).nice(4);
+  const ticks = y.ticks(4), ml = d3.max(ticks, t => measure(F.int(t))) + 10;
+  const x = d3.scaleBand(rows.map(r => r.horario), [ml, w - 8]).padding(0.15);
+  const svg = svgIn(el, w, h).attr('aria-label','Passageiros por bloco de 15 minutos com as horas de pico destacadas');
+  const g = svg.append('g');
+  const idx = rows.map(r => r.horario);
+  [[s.fhp_manha_inicio, s.fhp_manha], [s.fhp_tarde_inicio, s.fhp_tarde]].forEach(([ini, f]) => {
+    const i = idx.indexOf(ini); if (i < 0) return;
+    const x0 = x(idx[i]) - x.step() * x.paddingInner() / 2, x1 = x(idx[Math.min(i + 3, idx.length - 1)]) + x.bandwidth() + x.step() * x.paddingInner() / 2;
+    g.append('rect').attr('x', x0).attr('y', 4).attr('width', x1 - x0).attr('height', h - 30).attr('fill', 'var(--cds-chart-grid)').attr('rx', 4);
+    g.append('text').attr('class','bh-lab').attr('x', (x0 + x1) / 2).attr('y', 2).attr('text-anchor','middle').attr('dy','0.7em').text('FHP ' + F.n2(f));
+  });
+  ticks.forEach(t => { g.append('line').attr('x1', ml).attr('x2', w - 8).attr('y1', y(t)).attr('y2', y(t)).attr('stroke','var(--cds-chart-grid)').attr('opacity', .6);
+    g.append('text').attr('class','bh-tick').attr('x', ml - 8).attr('y', y(t) + 4).attr('text-anchor','end').text(F.int(t)); });
+  const inPeak = r => [s.fhp_manha_inicio, s.fhp_tarde_inicio].some(ini => { const i = idx.indexOf(ini), j = idx.indexOf(r.horario); return i >= 0 && j >= i && j < i + 4; });
+  const tip = tipBox(el);
+  rows.forEach(r => g.append('rect').attr('x', x(r.horario)).attr('y', y(+r.pax)).attr('width', x.bandwidth()).attr('height', Math.max(0, y(0) - y(+r.pax))).attr('rx', 1.5)
+    .attr('fill', inPeak(r) ? C()[0] : 'var(--cds-chart-muted)')
+    .on('pointermove', ev => { const [px, py] = d3.pointer(ev, el); showTip(el, tip, fmtHora(r.horario) + ' (15 min)', [{n: 'Passageiros', v: F.int(+r.pax)}], px, py); })
+    .on('pointerleave', () => tip.hidden = true));
+  g.append('line').attr('x1', ml).attr('x2', w - 8).attr('y1', y(0)).attr('y2', y(0)).attr('stroke','var(--cds-chart-axis)');
+  const step = w < 420 ? 4 : 2;
+  rows.filter(r => r.horario.endsWith(':00') && (+r.horario.slice(0, 2)) % step === 0).forEach(r => g.append('text').attr('class','bh-tick').attr('x', x(r.horario) + x.bandwidth() / 2).attr('y', h - 10).attr('text-anchor','middle').text((+r.horario.slice(0, 2)) + 'h'));
+}
+
+/* ---------- 4. faixas ---------- */
+function drawFaixas(){
+  const el = $('#ch-faixas'), leg = $('#leg-faixas');
+  if (!ready(el, ['faixas_carga'])) { leg.replaceChildren(); return; }
+  const rows = rowsOf('faixas_carga');
+  const a = css('var(--color-panel)'), b = css(C()[0]);
+  const col = i => d3.interpolateRgb(a, b)(0.18 + 0.82 * i / (rows.length - 1));
+  leg.replaceChildren(...rows.map((r, i) => { const s = document.createElement('span'); s.className = 'bh-badge'; const sw = document.createElement('span'); sw.className = 'bh-sw'; sw.style.background = col(i); const t = document.createElement('span'); t.textContent = r.faixa + ' embarques'; s.append(sw, t); return s; }));
+  const w = Math.max(el.clientWidth, 280), lw = 92, bh = 30, h = 2 * bh + 30;
+  const svg = svgIn(el, w, h).attr('aria-label','Distribuição de viagens e de passageiros por faixa de embarques');
+  const x = d3.scaleLinear([0, 1], [lw, w - 4]);
+  const tip = tipBox(el);
+  [['Viagens','pct_viagens'], ['Passageiros','pct_passageiros']].forEach(([nome, k], j) => {
+    const yy = 6 + j * (bh + 14);
+    svg.append('text').attr('class','bh-lab').attr('x', 0).attr('y', yy + bh / 2 + 4).text(nome);
+    let acc = 0;
+    rows.forEach((r, i) => { const v = +r[k], x0 = x(acc), x1 = x(acc + v); acc += v;
+      svg.append('rect').attr('x', x0 + (i ? 1 : 0)).attr('y', yy).attr('width', Math.max(0, x1 - x0 - (i ? 1 : 0))).attr('height', bh).attr('rx', i === 0 || i === rows.length - 1 ? 4 : 0).attr('fill', col(i))
+        .on('pointermove', ev => { const [px, py] = d3.pointer(ev, el); showTip(el, tip, r.faixa + ' embarques', [{n: nome, v: F.pct1(v)}], px, py); })
+        .on('pointerleave', () => tip.hidden = true);
+      if (x1 - x0 > 34) svg.append('text').attr('x', (x0 + x1) / 2).attr('y', yy + bh / 2 + 4).attr('text-anchor','middle').attr('font-size', 12)
+        .attr('fill', d3.hsl(col(i)).l > 0.55 ? '#1b1b1a' : '#ffffff').attr('pointer-events','none').text(F.pct0(v)); });
+  });
+}
+
+/* ---------- 5. tipologia ---------- */
+function drawTipos(){
+  const box = $('#tipos');
+  if (!ready(box, ['tipologia_perfil','tipologia_resumo'])) return;
+  const prof = rowsOf('tipologia_perfil'), res = rowsOf('tipologia_resumo');
+  const ymax = d3.max(prof, r => +r.participacao);
+  box.replaceChildren();
+  TIPOS.forEach((t, i) => {
+    const r = res.find(d => d.tipologia === t); if (!r) return;
+    const card = document.createElement('div'); card.className = 'bh-card'; card.id = 'tipo-' + i;
+    const h = document.createElement('h3'); const sw = document.createElement('span'); sw.className = 'bh-sw'; sw.style.background = C()[i]; sw.style.marginRight = '8px';
+    h.append(sw, document.createTextNode(t));
+    const stats = document.createElement('div'); stats.className = 'bh-type-stats';
+    const stat = (lab, val, f, fmt) => { const s = document.createElement('span'); const b = document.createElement('b'); b.textContent = fmt(val);
+      b.dataset.source = 'tipologia_resumo'; b.dataset.field = f; b.dataset.where = 'tipologia=' + encodeURIComponent(t); s.append(b, document.createTextNode(' ' + lab)); return s; };
+    stats.append(stat('linhas', +r.linhas, 'linhas', F.int), stat('pass./dia', +r.pax_dia, 'pax_dia', F.int), stat('emb./viagem (mediana)', +r.epv_mediana, 'epv_mediana', F.n1));
+    const note = document.createElement('p'); note.className = 'bh-note'; note.textContent = TIPO_TXT[t];
+    const ch = document.createElement('div'); ch.className = 'bh-chart sm'; ch.dataset.source = 'tipologia_perfil';
+    card.append(h, stats, ch, note); box.appendChild(card);
+    const w = Math.max(ch.clientWidth, 200), hh = 150;
+    const x = d3.scaleLinear([4, 23], [30, w - 6]), y = d3.scaleLinear([0, ymax], [hh - 22, 6]);
+    const svg = svgIn(ch, w, hh).attr('aria-label', 'Participação de cada hora na demanda diária: ' + t);
+    [0.05, 0.1, 0.15].filter(v => v < ymax).forEach(v => { svg.append('line').attr('x1', 30).attr('x2', w - 6).attr('y1', y(v)).attr('y2', y(v)).attr('stroke','var(--cds-chart-grid)');
+      svg.append('text').attr('class','bh-tick').attr('x', 26).attr('y', y(v) + 4).attr('text-anchor','end').text(F.pct0(v)); });
+    const pts = prof.filter(p => p.tipologia === t).map(p => ({x: +p.hora, y: +p.participacao})).sort((a, b) => a.x - b.x);
+    svg.append('path').attr('d', d3.area().x(d => x(d.x)).y0(y(0)).y1(d => y(d.y))(pts)).attr('fill', C()[i]).attr('opacity', .14);
+    svg.append('path').attr('d', d3.line().x(d => x(d.x)).y(d => y(d.y))(pts)).attr('fill','none').attr('stroke', C()[i]).attr('stroke-width', 2).attr('stroke-linejoin','round');
+    svg.append('line').attr('x1', 30).attr('x2', w - 6).attr('y1', y(0)).attr('y2', y(0)).attr('stroke','var(--cds-chart-axis)');
+    [6, 12, 18].forEach(hr => svg.append('text').attr('class','bh-tick').attr('x', x(hr)).attr('y', hh - 6).attr('text-anchor','middle').text(hr + 'h'));
+    const tip = tipBox(ch);
+    svg.append('rect').attr('x', 30).attr('width', w - 36).attr('height', hh).attr('fill','transparent')
+      .on('pointermove', ev => { const [px] = d3.pointer(ev); const hr = Math.max(4, Math.min(23, Math.round(x.invert(px)))); const p = pts.find(d => d.x === hr);
+        if (p) showTip(ch, tip, hr + 'h', [{n: 'Fatia do dia', v: F.pct1(p.y)}], x(hr) * ch.clientWidth / w, y(p.y)); })
+      .on('pointerleave', () => tip.hidden = true);
+  });
+}
+
+/* ---------- 6. mapa de calor + detalhe ---------- */
+const sel = $('#sel-linha');
+sel.addEventListener('change', () => dash.setParams({linha: sel.value}));
+function pick(l){ dash.setParams({linha: l}); }
+function drawHeat(){
+  const el = $('#ch-heat'), leg = $('#leg-heat');
+  if (!ready(el, ['linhas','linhas_hora'])) { leg.replaceChildren(); return; }
+  const lin = rowsOf('linhas'), lh = rowsOf('linhas_hora');
+  const cur = dash.params().linha || (lin[0] && lin[0].linha);
+  const top = lin.slice().sort((a, b) => b.pax_dia - a.pax_dia).slice(0, 40);
+  const byL = d3.group(lh, r => r.linha);
+  const a = css('var(--color-panel)'), b = css(C()[0]);
+  const VMAX = 90;
+  const color = v => v == null ? 'transparent' : d3.interpolateRgb(a, b)(0.08 + 0.92 * Math.min(1, v / VMAX));
+  // legenda em gradiente
+  leg.replaceChildren();
+  const lg = document.createElement('span'); lg.className = 'bh-badge'; lg.textContent = 'Embarques por viagem';
+  const bar = document.createElement('span'); bar.style.cssText = 'display:inline-block;width:140px;height:8px;border-radius:4px';
+  bar.style.background = `linear-gradient(90deg, ${color(0)}, ${color(VMAX / 2)}, ${color(VMAX)})`;
+  const l0 = document.createElement('span'); l0.textContent = '0'; const l1 = document.createElement('span'); l1.textContent = VMAX + ' ou mais';
+  const g1 = document.createElement('span'); g1.className = 'bh-badge'; g1.append(l0, bar, l1);
+  leg.append(lg, g1);
+  const w = Math.max(el.clientWidth, 300), lw = 54, ch = 13, gap = 2, gh = 22;
+  const x = d3.scaleBand(HRS, [lw, w - 4]).paddingInner(0.08);
+  let yy = 18; const layout = [];
+  TIPOS.forEach((t, i) => { const ls = top.filter(l => l.tipologia === t); if (!ls.length) return; layout.push({head: t, i, y: yy}); yy += gh; ls.forEach(l => { layout.push({l, y: yy, i}); yy += ch + gap; }); yy += 6; });
+  const h = yy + 4;
+  el.style.minHeight = h + 'px';
+  const svg = svgIn(el, w, h).attr('aria-label','Mapa de calor de embarques por viagem por linha e hora');
+  const step = w < 520 ? 4 : 2;
+  HRS.filter(hr => hr % step === 0).forEach(hr => svg.append('text').attr('class','bh-tick').attr('x', x(hr) + x.bandwidth() / 2).attr('y', 10).attr('text-anchor','middle').text(hr + 'h'));
+  const tip = tipBox(el);
+  layout.forEach(it => {
+    if (it.head) { const g = svg.append('g'); g.append('rect').attr('x', 0).attr('y', it.y + 6).attr('width', 10).attr('height', 10).attr('rx', 2).attr('fill', C()[it.i]);
+      g.append('text').attr('class','bh-lab').attr('x', 16).attr('y', it.y + 15).attr('font-weight', 500).text(it.head); return; }
+    const l = it.l, cells = new Map((byL.get(l.linha) || []).map(r => [+r.hora, r]));
+    const g = svg.append('g').attr('class','row').attr('tabindex', 0).attr('role','button').attr('aria-label', 'Linha ' + l.linha)
+      .on('click', () => pick(l.linha)).on('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(l.linha); } });
+    const isSel = l.linha === cur;
+    g.append('text').attr('class','bh-lab rl').attr('x', lw - 8).attr('y', it.y + ch - 2).attr('text-anchor','end').attr('font-weight', isSel ? 500 : 400).text(l.linha);
+    HRS.forEach(hr => { const c = cells.get(hr), v = c && c.epv != null ? +c.epv : null;
+      g.append('rect').attr('x', x(hr)).attr('y', it.y).attr('width', x.bandwidth()).attr('height', ch).attr('rx', 2).attr('fill', color(v))
+        .attr('stroke', v == null ? 'var(--cds-chart-grid)' : null)
+        .on('pointermove', ev => { const [px, py] = d3.pointer(ev, el);
+          showTip(el, tip, 'Linha ' + l.linha + ' · ' + hr + 'h' + (l.nome ? ' · ' + l.nome : ''), [{n: 'Embarques por viagem', v: v == null ? 'sem viagens' : F.n1(v)}, {n: 'Passageiros na hora', v: c ? F.int(+c.pax) : '0'}, {n: 'Viagens na hora', v: c ? F.n1(+c.viagens) : '0'}], px, py); })
+        .on('pointerleave', () => tip.hidden = true); });
+    if (isSel) g.append('rect').attr('x', lw - 2).attr('y', it.y - 2).attr('width', w - lw - 2).attr('height', ch + 4).attr('rx', 4).attr('fill','none').attr('stroke','var(--color-fg)').attr('stroke-width', 1.5).attr('pointer-events','none');
+  });
+}
+function drawDetalhe(){
+  const lin = rowsOf('linhas'), lh = rowsOf('linhas_hora');
+  const box = $('#ch-det');
+  if (!lin) { if (st('linhas') === 'error') fail(box); return; }
+  const cur = dash.params().linha || lin[0].linha;
+  const sorted = lin.slice().sort((a, b) => a.ranking - b.ranking);
+  if (sel.options.length !== sorted.length) sel.replaceChildren(...sorted.map(l => new Option(l.linha + ' · ' + (l.nome || F.int(l.pax_dia) + ' pass./dia'), l.linha)));
+  sel.value = cur;
+  const l = lin.find(r => r.linha === cur) || sorted[0];
+  const where = 'linha=' + encodeURIComponent(l.linha);
+  const set = (id, f, fmt) => { const e = $(id); e.dataset.where = where; e.textContent = l[f] == null ? '—' : fmt(+l[f]); };
+  set('#det-pax', 'pax_dia', F.int); set('#det-viagens', 'viagens_dia', F.n1); set('#det-epv', 'epv', F.n1); set('#det-perc', 'epv_percebida', F.n1); set('#det-ipk', 'ipk', F.n2); set('#det-ferias', 'delta_ferias', F.spct);
+  set('#det-carga', 'carga_pico', F.n1); const dn = $('#det-nome'); dn.dataset.where = where; dn.textContent = l.nome || ''; const dsv = $('#det-serv'); dsv.dataset.where = where; dsv.textContent = l.servico || '—';
+  const tn = $('#det-tipo-nome'); tn.dataset.where = where; tn.textContent = l.tipologia; $('#det-sw').style.background = C()[TIPOS.indexOf(l.tipologia)] || 'var(--cds-chart-muted)';
+  document.querySelectorAll('#tabela tbody tr').forEach(tr => tr.classList.toggle('is-sel', tr.dataset.key === l.linha));
+  if (!lh) { box.classList.add('dash-skeleton'); return; }
+  box.classList.remove('dash-skeleton');
+  const rows = lh.filter(r => r.linha === l.linha);
+  const series = [
+    {name: 'Dia útil', color: C()[0], values: rows.map(r => ({x: +r.hora, y: +r.pax}))},
+    {name: 'Férias', color: C()[1], dash: '6 4', values: rows.map(r => ({x: +r.hora, y: +r.pax_ferias}))}
+  ];
+  const leg = $('#leg-det');
+  leg.replaceChildren(...series.map(s => { const b = document.createElement('span'); b.className = 'bh-badge'; const sw = document.createElement('span'); sw.className = 'bh-sw';
+    if (s.dash) { sw.style.borderTop = '2px dashed ' + s.color; sw.style.height = '0'; sw.style.width = '14px'; } else sw.style.background = s.color;
+    const t = document.createElement('span'); t.textContent = s.name; b.append(sw, t); return b; }));
+  lineChart(box, series, {height: 200, yFmt: v => loc.format(',.0f')(v), label: 'Passageiros por hora da linha ' + l.linha + ' em dia útil e nas férias'});
+}
+
+/* ---------- 7. férias ---------- */
+function drawFerias(){
+  const el = $('#ch-ferias');
+  if (!ready(el, ['efeito_ferias'])) return;
+  const rows = rowsOf('efeito_ferias').map(r => ({hora: r.hora, v: r.delta}));
+  divBars(el, rows, {base: 0, fmt: F.spct, pos: C()[0], neg: C()[1], name: 'Variação', label: 'Variação percentual da demanda nas férias por hora', height: 230});
+}
+
+/* ---------- 8. calendário ---------- */
+function drawCal(){
+  const el = $('#ch-cal'), dl = $('#dias-especiais');
+  if (!ready(el, ['calendario'])) { dl.replaceChildren(); return; }
+  const parse = d3.utcParse('%Y-%m-%d');
+  const rows = rowsOf('calendario').map(r => ({...r, date: parse(r.dia)}));
+  const first = d3.utcMonday.floor(rows[0].date);
+  const weeks = d3.utcMonday.count(first, rows[rows.length - 1].date) + 1;
+  const w = Math.max(el.clientWidth, 280), lw = 30;
+  const cs = Math.max(8, Math.min(22, Math.floor((w - lw) / weeks) - 2));
+  const h = 7 * (cs + 2) + 26;
+  el.style.minHeight = h + 'px';
+  const a = css('var(--color-panel)'), b = css(C()[0]);
+  const mx = d3.max(rows, r => +r.pax);
+  const color = v => d3.interpolateRgb(a, b)(0.1 + 0.9 * v / mx);
+  const svg = svgIn(el, w, h).attr('aria-label','Calendário com o total de passageiros por dia');
+  ['seg','','qua','','sex','','dom'].forEach((d, i) => d && svg.append('text').attr('class','bh-tick').attr('x', 0).attr('y', 22 + i * (cs + 2) + cs - 2).text(d));
+  const mfmt = d => ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][d.getUTCMonth()];
+  const tip = tipBox(el);
+  rows.forEach(r => {
+    const wk = d3.utcMonday.count(first, r.date), dow = (r.date.getUTCDay() + 6) % 7;
+    const xx = lw + wk * (cs + 2), yy = 18 + dow * (cs + 2);
+    if (r.date.getUTCDate() === 1) svg.append('text').attr('class','bh-tick').attr('x', xx).attr('y', 10).text(mfmt(r.date));
+    const especial = !['Dia útil','Sábado','Domingo'].includes(r.tipo_dia);
+    svg.append('rect').attr('x', xx).attr('y', yy).attr('width', cs).attr('height', cs).attr('rx', 2).attr('fill', color(+r.pax))
+      .attr('stroke', especial ? 'var(--color-fg)' : null).attr('stroke-width', especial ? 1.5 : null)
+      .on('pointermove', ev => { const [px, py] = d3.pointer(ev, el); showTip(el, tip, d3.utcFormat('%d/%m/%Y')(r.date), [{n: r.tipo_dia, v: F.int(+r.pax) + ' pass.'}], px, py); })
+      .on('pointerleave', () => tip.hidden = true);
+  });
+  const esp = rows.filter(r => !['Dia útil','Sábado','Domingo'].includes(r.tipo_dia));
+  const grupos = d3.groups(esp, r => r.tipo_dia);
+  dl.replaceChildren(...grupos.map(([tipo, rs]) => { const s = document.createElement('span'); s.className = 'bh-day';
+    const bb = document.createElement('b'); bb.textContent = tipo; s.appendChild(bb);
+    const ds = rs.length > 3 ? d3.utcFormat('%d/%m')(rs[0].date) + ' a ' + d3.utcFormat('%d/%m')(rs[rs.length - 1].date) : rs.map(r => d3.utcFormat('%d/%m')(r.date)).join(', ');
+    s.appendChild(document.createTextNode(' · ' + ds + ' · ' + F.int(d3.mean(rs, r => +r.pax)) + ' pass./dia')); return s; }));
+}
+
+/* ---------- 9. tabela ---------- */
+let sortK = 'pax_dia', sortD = -1;
+const busca = $('#busca');
+busca.addEventListener('input', () => drawTabela());
+document.querySelectorAll('#tabela th button').forEach(b => b.addEventListener('click', () => { const k = b.dataset.k; if (sortK === k) sortD = -sortD; else { sortK = k; sortD = ['linha','tipologia','nome'].includes(k) ? 1 : -1; } drawTabela(); }));
+$('#tabela tbody').addEventListener('click', ev => { const tr = ev.target.closest('tr[data-key]'); if (tr) { pick(tr.dataset.key); $('#mapa').scrollIntoView({behavior: 'smooth', block: 'start'}); dash.setLink('mapa'); } });
+function drawTabela(){
+  const tb = $('#tabela tbody'), lin = rowsOf('linhas');
+  if (!lin) { tb.replaceChildren(); return; }
+  const q = busca.value.trim().toLowerCase();
+  const rows = lin.filter(r => !q || (r.linha + ' ' + r.tipologia + ' ' + (r.nome || '')).toLowerCase().includes(q))
+    .sort((a, b) => { const x = a[sortK], y = b[sortK]; if (x == null) return 1; if (y == null) return -1; return (typeof x === 'string' ? x.localeCompare(y, 'pt-BR', {numeric: true}) : x - y) * sortD; });
+  document.querySelectorAll('#tabela th').forEach(th => th.setAttribute('aria-sort', th.dataset.field === sortK ? (sortD > 0 ? 'ascending' : 'descending') : 'none'));
+  $('#contagem').textContent = F.int(rows.length) + ' de ' + F.int(lin.length) + ' linhas';
+  const mx = d3.max(lin, r => +r.pax_dia), cur = dash.params().linha;
+  tb.replaceChildren(...rows.map(r => {
+    const tr = document.createElement('tr'); tr.dataset.key = r.linha; if (r.linha === cur) tr.classList.add('is-sel');
+    const td = (txt, opt) => { const c = document.createElement('td'); if (opt) c.className = 'bh-opt'; c.textContent = txt; return c; };
+    const c0 = td(r.linha); const cn = td(r.nome || '', true); cn.classList.add('nm'); cn.title = r.nome || '';
+    const c1 = td('', true); const sw = document.createElement('span'); sw.className = 'bh-sw'; sw.style.background = C()[TIPOS.indexOf(r.tipologia)]; sw.style.marginRight = '6px'; c1.append(sw, document.createTextNode(r.tipologia));
+    const c2 = td(''); const bar = document.createElement('span'); bar.className = 'bh-bar'; bar.style.width = (48 * r.pax_dia / mx) + 'px'; bar.style.background = C()[0]; c2.append(bar, document.createTextNode(F.int(r.pax_dia)));
+    tr.append(c0, cn, c1, c2, td(F.n1(r.viagens_dia), true), td(F.n1(r.epv)), td(F.n1(r.epv_percebida)), td(F.n2(r.ipk), true), td(r.hora_pico + 'h', true), td(F.pct0(r.conc_pico), true), td(r.cv_pico == null ? '—' : F.n2(r.cv_pico), true), td(r.carga_pico == null ? '—' : F.n1(r.carga_pico), true), td(r.delta_ferias == null ? '—' : F.spct(r.delta_ferias)));
+    return tr; }));
+}
+
+
+/* ===================== mapa da cidade ===================== */
+dash.calc('corredores', {
+  title: 'Corredores mais carregados por hora',
+  description: 'Para cada hora, as 8 ruas cujo quadrado de 250 m mais carregado tem a maior carga estimada.',
+  inputs: ['grade'],
+  fn: (grade) => {
+    const out = [];
+    for (let h = 4; h <= 23; h++) {
+      const best = new Map();
+      grade.forEach(c => { if (!c.rua || c.regional === 'Fora de BH') return; const v = +c['h' + h]; const b = best.get(c.rua); if (!b || v > b.carga) best.set(c.rua, {rua: c.rua, regional: c.regional, carga: v}); });
+      [...best.values()].sort((a, b) => b.carga - a.carga).slice(0, 8).forEach((r, i) => out.push({hora: h, posicao: i + 1, rua: r.rua, regional: r.regional, carga: Math.round(r.carga)}));
+    }
+    return out;
+  }
+});
+dash.calc('regional_hora', {
+  title: 'Movimento por regional e hora',
+  description: 'Soma da carga dos quadrados de cada regional × 0,25 km (passageiros·km por hora) e a fatia de cada regional na hora.',
+  inputs: ['grade'],
+  fn: (grade) => {
+    const out = [];
+    for (let h = 4; h <= 23; h++) {
+      const m = d3.rollup(grade.filter(c => c.regional !== 'Fora de BH'), v => d3.sum(v, c => +c['h' + h]) * 0.25, c => c.regional);
+      const tot = d3.sum(m.values());
+      m.forEach((v, k) => out.push({regional: k, hora: h, pkm: Math.round(v), fatia: Math.round(v / tot * 10000) / 10000}));
+    }
+    return out;
+  }
+});
+dash.calc('regional_razao', {
+  title: 'Manhã ÷ tarde por regional',
+  description: 'Passageiros·km às 6h ÷ passageiros·km às 17h em cada regional.',
+  inputs: ['regional_hora'],
+  fn: (regional_hora) => {
+    const g = d3.group(regional_hora, r => r.regional);
+    return [...g].map(([k, rs]) => ({regional: k, razao: Math.round(rs.find(r => r.hora === 6).pkm / rs.find(r => r.hora === 17).pkm * 100) / 100}));
+  }
+});
+let horaCidade = 6, playing = null;
+const hc = $('#hora-cidade'), playBtn = $('#play-cidade');
+hc.addEventListener('input', () => { horaCidade = +hc.value; drawCidade(); drawCorredores(); });
+playBtn.addEventListener('click', () => {
+  if (playing) { clearInterval(playing); playing = null; playBtn.setAttribute('aria-pressed', 'false'); playBtn.textContent = 'Play'; return; }
+  playBtn.setAttribute('aria-pressed', 'true'); playBtn.textContent = 'Pausar';
+  playing = setInterval(() => { horaCidade = horaCidade >= 23 ? 4 : horaCidade + 1; hc.value = horaCidade; drawCidade(); drawCorredores(); }, 800);
+});
+let mapCache = null;
+function drawCidade(){
+  const el = $('#ch-cidade'), leg = $('#leg-cidade');
+  $('#hora-label').textContent = horaCidade + 'h'; $('#hora-corr').textContent = horaCidade + 'h';
+  if (!ready(el, ['grade','regionais'])) { leg.replaceChildren(); return; }
+  const grade = rowsOf('grade'), regs = rowsOf('regionais');
+  if (!mapCache || mapCache.src !== grade) {
+    const polys = regs.map(r => ({nome: r.regional, pts: JSON.parse(r.coords), cx: +r.cx, cy: +r.cy}));
+    const xs = polys.flatMap(p => p.pts.map(q => q[0])), ys = polys.flatMap(p => p.pts.map(q => q[1]));
+    const pad = 800;
+    const ext = [d3.min(xs) - pad, d3.max(xs) + pad, d3.min(ys) - pad, d3.max(ys) + pad];
+    let vmax = 0; grade.forEach(c => { for (let h = 4; h <= 23; h++) vmax = Math.max(vmax, +c['h' + h]); });
+    const idx = new Map(grade.map(c => [c.i + ',' + c.j, c]));
+    mapCache = {src: grade, polys, ext, vmax, idx};
+  }
+  const {polys, ext, vmax, idx} = mapCache;
+  const dx = ext[1] - ext[0], dy = ext[3] - ext[2];
+  const w = Math.max(el.clientWidth, 280), h = Math.min(Math.round(w * dy / dx), 760);
+  const k = Math.min(w / dx, h / dy), ox = (w - dx * k) / 2, oy = (h - dy * k) / 2;
+  const X = e => ox + (e - ext[0]) * k, Y = n => oy + (ext[3] - n) * k;
+  el.style.minHeight = h + 'px';
+  let cv = el.querySelector('canvas');
+  if (!cv) { cv = document.createElement('canvas'); cv.setAttribute('role', 'img'); el.appendChild(cv); }
+  cv.setAttribute('aria-label', 'Mapa de calor de Belo Horizonte com a carga estimada de passageiros às ' + horaCidade + 'h');
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  const panel = css('var(--color-panel)'), hot = css(C()[1]), fg = css('var(--color-fg)'), muted = css('var(--color-fg-muted)'), grid = css('var(--cds-chart-grid)');
+  const sq = d3.scaleSqrt([0, vmax], [0, 1]).clamp(true);
+  const col = v => d3.interpolateRgb(panel, hot)(0.1 + 0.9 * sq(v));
+  const path = p => { ctx.beginPath(); p.pts.forEach((q, i) => i ? ctx.lineTo(X(q[0]), Y(q[1])) : ctx.moveTo(X(q[0]), Y(q[1]))); ctx.closePath(); };
+  polys.forEach(p => { path(p); ctx.fillStyle = grid; ctx.globalAlpha = .35; ctx.fill(); ctx.globalAlpha = 1; });
+  const cs = Math.max(1, 250 * k), key = 'h' + horaCidade;
+  const cells = mapCache.src.filter(c => +c[key] > vmax * 0.002).sort((a, b) => a[key] - b[key]);
+  cells.forEach(c => { ctx.fillStyle = col(+c[key]); ctx.fillRect(X(c.i * 250), Y((c.j + 1) * 250), cs + .5, cs + .5); });
+  ctx.lineWidth = 1; ctx.strokeStyle = muted; ctx.globalAlpha = .55;
+  polys.forEach(p => { path(p); ctx.stroke(); }); ctx.globalAlpha = 1;
+  const fs = w < 480 ? 10 : 12;
+  ctx.font = `500 ${fs}px ${getComputedStyle(el).fontFamily}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  polys.forEach(p => { if (p.nome === 'Hipercentro') return; ctx.lineWidth = 3; ctx.strokeStyle = panel; ctx.strokeText(p.nome, X(p.cx), Y(p.cy)); ctx.fillStyle = fg; ctx.fillText(p.nome, X(p.cx), Y(p.cy)); });
+  // legenda
+  leg.replaceChildren();
+  const t1 = document.createElement('span'); t1.className = 'bh-badge'; t1.textContent = 'Passageiros por hora a bordo (estimativa)';
+  const g1 = document.createElement('span'); g1.className = 'bh-badge';
+  const bar = document.createElement('span'); bar.style.cssText = 'display:inline-block;width:140px;height:8px;border-radius:4px';
+  bar.style.background = `linear-gradient(90deg, ${col(0)}, ${col(vmax * .0625)}, ${col(vmax * .25)}, ${col(vmax)})`;
+  const a0 = document.createElement('span'); a0.textContent = '0'; const a1 = document.createElement('span'); a1.textContent = F.int(Math.round(vmax / 1000) * 1000);
+  g1.append(a0, bar, a1); leg.append(t1, g1);
+  const tip = tipBox(el);
+  cv.onpointermove = ev => {
+    const r = cv.getBoundingClientRect(), px = ev.clientX - r.left, py = ev.clientY - r.top;
+    const e = ext[0] + (px - ox) / k, n = ext[3] - (py - oy) / k;
+    const c = idx.get(Math.floor(e / 250) + ',' + Math.floor(n / 250));
+    if (!c || +c[key] <= 0) { tip.hidden = true; return; }
+    showTip(el, tip, (c.rua || 'Sem parada no quadrado') + ' · ' + c.regional, [{n: 'Às ' + horaCidade + 'h', v: F.int(+c[key]) + ' pass./h'}, {n: 'Pico do quadrado', v: F.int(d3.max(d3.range(4, 24), hh => +c['h' + hh])) + ' pass./h'}], px, py);
+  };
+  cv.onpointerleave = () => tip.hidden = true;
+}
+function drawCorredores(){
+  const ol = $('#lista-corredores');
+  const rows = rowsOf('corredores');
+  if (!rows) { if (st('grade') === 'error') fail(ol); return; }
+  ol.classList.remove('dash-skeleton');
+  const rs = rows.filter(r => r.hora === horaCidade), mx = d3.max(rows, r => r.carga);
+  ol.replaceChildren(...rs.map(r => { const li = document.createElement('li');
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = r.posicao;
+    const nm = document.createElement('span'); nm.className = 'nm'; const b = document.createElement('span'); b.textContent = r.rua; b.dataset.source = 'corredores'; b.dataset.field = 'rua'; b.dataset.where = 'hora=' + r.hora + '&posicao=' + r.posicao;
+    const sm = document.createElement('small'); sm.textContent = ' · ' + r.regional; nm.append(b, sm);
+    const v = document.createElement('span'); v.textContent = F.int(r.carga); v.dataset.source = 'corredores'; v.dataset.field = 'carga'; v.dataset.where = 'hora=' + r.hora + '&posicao=' + r.posicao;
+    const bar = document.createElement('span'); bar.className = 'bar'; bar.style.background = C()[1]; bar.style.width = (100 * r.carga / mx) + '%';
+    li.append(n, nm, v, bar); return li; }));
+}
+function drawRegionais(){
+  const el = $('#ch-reg'), leg = $('#leg-reg');
+  if (!ready(el, ['regional_hora','regional_razao'])) { leg.replaceChildren(); return; }
+  const rh = rowsOf('regional_hora'), rz = new Map(rowsOf('regional_razao').map(r => [r.regional, r.razao]));
+  const regs = [...new Set(rh.map(r => r.regional))].sort((a, b) => rz.get(b) - rz.get(a));
+  const get = (g, hh) => (rh.find(r => r.regional === g && r.hora === hh) || {}).fatia || 0;
+  const cM = C()[0], cT = C()[1];
+  leg.replaceChildren(...[['6h', cM, true], ['17h', cT, false]].map(([t, c, anel]) => { const s = document.createElement('span'); s.className = 'bh-badge'; const sw = document.createElement('span'); sw.className = 'bh-sw'; sw.style.borderRadius = '50%'; if (anel) { sw.style.border = '2px solid ' + c; sw.style.background = 'transparent'; } else sw.style.background = c; const tx = document.createElement('span'); tx.textContent = t; s.append(sw, tx); return s; }));
+  const w = Math.max(el.clientWidth, 260), lw = d3.max(regs, g => measure(g)) + 12, rowH = 26, h = regs.length * rowH + 28;
+  el.style.minHeight = h + 'px';
+  const mx = d3.max(rh.filter(r => r.hora === 6 || r.hora === 17), r => r.fatia);
+  const x = d3.scaleLinear([0, mx * 1.1], [lw, w - 40]);
+  const svg = svgIn(el, w, h).attr('aria-label', 'Fatia de cada regional no movimento às 6h e às 17h');
+  x.ticks(4).forEach(t => { svg.append('line').attr('x1', x(t)).attr('x2', x(t)).attr('y1', 4).attr('y2', h - 22).attr('stroke', 'var(--cds-chart-grid)');
+    svg.append('text').attr('class', 'bh-tick').attr('x', x(t)).attr('y', h - 6).attr('text-anchor', 'middle').text(F.pct0(t)); });
+  const tip = tipBox(el);
+  regs.forEach((g, i) => {
+    const y = 10 + i * rowH + rowH / 2, a = get(g, 6), b = get(g, 17);
+    svg.append('text').attr('class', 'bh-lab').attr('x', lw - 10).attr('y', y + 4).attr('text-anchor', 'end').text(g);
+    svg.append('line').attr('x1', x(Math.min(a, b))).attr('x2', x(Math.max(a, b))).attr('y1', y).attr('y2', y).attr('stroke', 'var(--cds-chart-axis)').attr('stroke-width', 2);
+    svg.append('circle').attr('cx', x(b)).attr('cy', y).attr('r', 5).attr('fill', cT).attr('stroke', 'var(--color-panel)').attr('stroke-width', 2);
+    svg.append('circle').attr('cx', x(a)).attr('cy', y).attr('r', 5).attr('fill', 'none').attr('stroke', cM).attr('stroke-width', 2.5);
+    svg.append('text').attr('class', 'bh-tick').attr('x', x(Math.max(a, b)) + 10).attr('y', y + 4).text(loc.format(',.1f')(rz.get(g)) + '×');
+    svg.append('rect').attr('x', 0).attr('y', y - rowH / 2).attr('width', w).attr('height', rowH).attr('fill', 'transparent')
+      .on('pointermove', ev => { const [px, py] = d3.pointer(ev, el); showTip(el, tip, g, [{c: cM, n: 'Fatia às 6h', v: F.pct1(a)}, {c: cT, n: 'Fatia às 17h', v: F.pct1(b)}, {n: '6h ÷ 17h', v: loc.format(',.2f')(rz.get(g)) + '×'}], px, py); })
+      .on('pointerleave', () => tip.hidden = true);
+  });
+}
+
+/* ===================== ocupação ===================== */
+const PERIODOS = ['Pico da manhã (5h–7h)', 'Pico da tarde (16h–18h)', 'Fora do pico'];
+dash.calc('carga_limiar', {
+  title: 'Passageiros acima de uma lotação',
+  description: 'Parcela dos passageiros de cada período em viagens cuja carga máxima estimada é maior ou igual ao limite.',
+  inputs: ['carga_hist'],
+  fn: (carga_hist) => {
+    const out = [];
+    d3.group(carga_hist, r => r.periodo).forEach((rs, per) => { const tot = d3.sum(rs, r => +r.passageiros);
+      for (let lim = 20; lim <= 100; lim += 5) out.push({periodo: per, limite: lim, pct: Math.round(d3.sum(rs.filter(r => +r.carga_ini >= lim), r => +r.passageiros) / tot * 1000) / 1000}); });
+    return out;
+  }
+});
+dash.calc('por_servico', {
+  title: 'Indicadores por tipo de serviço',
+  description: 'Linhas, passageiros, embarques por viagem (Σ passageiros ÷ Σ viagens), mediana da carga no pico e do fator, por tipo de serviço.',
+  inputs: ['linhas'],
+  fn: (linhas) => [...d3.group(linhas, l => l.servico)].map(([s, ls]) => ({servico: s, linhas: ls.length, pax_dia: Math.round(d3.sum(ls, l => +l.pax_dia)),
+    epv: Math.round(d3.sum(ls, l => +l.pax_dia) / d3.sum(ls, l => +l.viagens_dia) * 10) / 10,
+    carga_pico: Math.round(d3.median(ls, l => +l.carga_pico) * 10) / 10, fator: Math.round(d3.median(ls, l => +l.fator) * 100) / 100})).sort((a, b) => b.pax_dia - a.pax_dia)
+});
+let periodo = PERIODOS[0], limite = 40;
+const seg = $('#seg-periodo'), lim = $('#limite');
+seg.replaceChildren(...PERIODOS.map(p => { const b = document.createElement('button'); b.type = 'button'; b.className = 'bh-btn'; b.textContent = p; b.addEventListener('click', () => { periodo = p; drawHist(); }); return b; }));
+lim.addEventListener('input', () => { limite = +lim.value; drawHist(); });
+function drawHist(){
+  const el = $('#ch-hist');
+  seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.textContent === periodo)));
+  $('#limite-label').textContent = limite; $('#hist-lim').textContent = limite;
+  const pct = $('#hist-pct'), lr = rowsOf('carga_limiar');
+  pct.dataset.where = 'periodo=' + encodeURIComponent(periodo) + '&limite=' + limite;
+  const pr = lr && lr.find(r => r.periodo === periodo && r.limite === limite);
+  pct.textContent = pr ? F.pct1(pr.pct) : '—';
+  if (!ready(el, ['carga_hist'])) return;
+  const rows = rowsOf('carga_hist').filter(r => r.periodo === periodo).map(r => ({b: +r.carga_ini, p: +r.passageiros})).sort((a, b) => a.b - b.b);
+  const w = Math.max(el.clientWidth, 280), h = 240;
+  const y = d3.scaleLinear([0, d3.max(rows, r => r.p)], [h - 26, 10]).nice(4);
+  const ticks = y.ticks(4), ml = d3.max(ticks, t => measure(F.int(t))) + 10;
+  const x = d3.scaleLinear([0, 155], [ml, w - 8]);
+  const svg = svgIn(el, w, h).attr('aria-label', 'Passageiros por carga máxima estimada da viagem, ' + periodo);
+  ticks.forEach(t => { svg.append('line').attr('x1', ml).attr('x2', w - 8).attr('y1', y(t)).attr('y2', y(t)).attr('stroke', 'var(--cds-chart-grid)');
+    svg.append('text').attr('class', 'bh-tick').attr('x', ml - 8).attr('y', y(t) + 4).attr('text-anchor', 'end').text(F.int(t)); });
+  const tip = tipBox(el), bw = Math.max(1, x(5) - x(0) - 2);
+  rows.forEach(r => svg.append('rect').attr('x', x(r.b) + 1).attr('y', y(r.p)).attr('width', bw).attr('height', Math.max(0, y(0) - y(r.p))).attr('rx', 2)
+    .attr('fill', r.b >= limite ? C()[1] : 'var(--cds-chart-muted)')
+    .on('pointermove', ev => { const [px, py] = d3.pointer(ev, el); showTip(el, tip, (r.b >= 150 ? '150 ou mais' : r.b + ' a ' + (r.b + 4)) + ' a bordo', [{n: 'Passageiros por dia útil', v: F.int(r.p)}], px, py); })
+    .on('pointerleave', () => tip.hidden = true));
+  svg.append('line').attr('x1', x(limite)).attr('x2', x(limite)).attr('y1', 6).attr('y2', h - 26).attr('stroke', 'var(--cds-chart-reference)').attr('stroke-dasharray', '4 3');
+  svg.append('line').attr('x1', ml).attr('x2', w - 8).attr('y1', y(0)).attr('y2', y(0)).attr('stroke', 'var(--cds-chart-axis)');
+  [0, 25, 50, 75, 100, 125, 150].forEach(t => svg.append('text').attr('class', 'bh-tick').attr('x', x(t)).attr('y', h - 8).attr('text-anchor', 'middle').text(t === 150 ? '150+' : t));
+}
+function drawTopCarga(){
+  const el = $('#ch-topcarga');
+  if (!ready(el, ['linhas'])) return;
+  const rows = rowsOf('linhas').filter(l => l.carga_pico != null).sort((a, b) => b.carga_pico - a.carga_pico).slice(0, 12);
+  const w = Math.max(el.clientWidth, 260), rowH = 32, h = rows.length * rowH + 8;
+  el.style.minHeight = h + 'px';
+  const x = d3.scaleLinear([0, d3.max(rows, r => r.carga_pico)], [0, w - 44]);
+  const svg = svgIn(el, w, h).attr('aria-label', 'Linhas com maior carga máxima estimada na hora de pico');
+  const tip = tipBox(el);
+  rows.forEach((r, i) => { const y0 = 4 + i * rowH;
+    const label = r.linha + ' · ' + (r.nome || ''); const maxc = Math.floor((w - 50) / 6.4);
+    svg.append('text').attr('class', 'bh-lab').attr('x', 0).attr('y', y0 + 10).text(label.length > maxc ? label.slice(0, maxc - 1) + '…' : label);
+    svg.append('rect').attr('x', 0).attr('y', y0 + 15).attr('height', 9).attr('width', Math.max(2, x(r.carga_pico))).attr('rx', 4).attr('fill', C()[1]);
+    svg.append('text').attr('class', 'bh-tick').attr('x', x(r.carga_pico) + 6).attr('y', y0 + 23).text(F.n1(r.carga_pico));
+    svg.append('rect').attr('x', 0).attr('y', y0).attr('width', w).attr('height', rowH).attr('fill', 'transparent').style('cursor', 'pointer')
+      .on('click', () => { pick(r.linha); $('#mapa').scrollIntoView({behavior: 'smooth', block: 'start'}); })
+      .on('pointermove', ev => { const [px, py] = d3.pointer(ev, el); showTip(el, tip, 'Linha ' + r.linha, [{n: 'Carga no pico (est.)', v: F.n1(r.carga_pico)}, {n: 'Hora de pico', v: r.hora_pico + 'h'}, {n: 'Embarques/viagem', v: F.n1(r.epv)}, {n: 'Fator de rotatividade', v: F.n2(r.fator)}, {n: 'Serviço', v: r.servico}], px, py); })
+      .on('pointerleave', () => tip.hidden = true); });
+}
+function drawServico(){
+  const tb = $('#tab-servico tbody'), rows = rowsOf('por_servico');
+  if (!rows) { tb.replaceChildren(); return; }
+  tb.replaceChildren(...rows.map(r => { const tr = document.createElement('tr');
+    [r.servico, F.int(r.linhas), F.int(r.pax_dia), F.n1(r.epv), r.carga_pico == null || isNaN(r.carga_pico) ? '—' : F.n1(r.carga_pico), r.fator == null || isNaN(r.fator) ? '—' : F.n2(r.fator)]
+      .forEach(t => { const td = document.createElement('td'); td.textContent = t; tr.appendChild(td); }); return tr; }));
+}
+
+let firstLink = false;
+dash.onData(() => {
+  fillMarks();
+  drawCidade(); drawCorredores(); drawRegionais(); drawHist(); drawTopCarga(); drawServico();
+  drawPerfil(); drawOD(); drawFHP(); drawFaixas(); drawTipos(); drawHeat(); drawDetalhe(); drawFerias(); drawCal(); drawTabela();
+  if (!firstLink && st('linhas') === 'ok') { firstLink = true; const n = document.getElementById(location.hash.slice(1)); if (n && n.closest('#painel')) n.scrollIntoView(); }
+});
+})();
+</script>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# dados brutos e intermediários (grandes demais para o git)
+data/raw/*
+!data/raw/README.md
+data/interim/
+
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
