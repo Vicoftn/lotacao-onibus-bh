@@ -2,7 +2,7 @@
 
 Análise da demanda e da lotação do transporte coletivo por ônibus de Belo Horizonte, por linha, por hora e por região da cidade. O estudo usa só dados abertos da BHTRANS e da Prefeitura de BH: 2,4 milhões de viagens registradas entre maio e julho de 2026, o GTFS da rede e a pesquisa de embarque e desembarque.
 
-**[Abrir o painel interativo](https://SEU-USUARIO.github.io/lotacao-onibus-bh/)** <!-- troque SEU-USUARIO pelo seu usuário do GitHub depois de ativar o GitHub Pages -->
+**[Abrir o painel interativo](https://Vicoftn.github.io/lotacao-onibus-bh/)** <!-- troque Vicoftn pelo seu usuário do GitHub depois de ativar o GitHub Pages -->
 
 ![Mapa de calor da cidade às 6h, com os corredores mais carregados e a comparação entre regionais](docs/img/mapa_cidade.jpg)
 
@@ -76,7 +76,7 @@ Os resultados processados, já agregados, estão em [`data/processed/`](data/pro
 Requer Python 3.11 ou mais novo.
 
 ```bash
-git clone https://github.com/SEU-USUARIO/lotacao-onibus-bh.git
+git clone https://github.com/Vicoftn/lotacao-onibus-bh.git
 cd lotacao-onibus-bh
 pip install -r requirements.txt
 # baixe os arquivos listados em data/raw/README.md para data/raw/
@@ -96,7 +96,7 @@ Para ver o painel no seu computador, rode `python -m http.server` dentro de `doc
 
 ### Publicar no GitHub Pages
 
-Em **Settings → Pages**, escolha **Deploy from a branch**, a branch `main` e a pasta `/docs`. Depois de alguns minutos o painel fica em `https://SEU-USUARIO.github.io/lotacao-onibus-bh/`.
+Em **Settings → Pages**, escolha **Deploy from a branch**, a branch `main` e a pasta `/docs`. Depois de alguns minutos o painel fica em `https://Vicoftn.github.io/lotacao-onibus-bh/`.
 
 ## Estrutura
 
