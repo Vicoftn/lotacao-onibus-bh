@@ -2,7 +2,7 @@
 
 Análise da demanda e da lotação do transporte coletivo por ônibus de Belo Horizonte, por linha, por hora e por região da cidade. O estudo usa só dados abertos da BHTRANS e da Prefeitura de BH: 2,4 milhões de viagens registradas entre maio e julho de 2026, o GTFS da rede e a pesquisa de embarque e desembarque.
 
-**[Abrir o painel interativo](https://Vicoftn.github.io/lotacao-onibus-bh/)** <!-- troque Vicoftn pelo seu usuário do GitHub depois de ativar o GitHub Pages -->
+**[Abrir o painel interativo](https://Vicoftn.github.io/lotacao-onibus-bh/)**
 
 ![Mapa de calor da cidade às 6h, com os corredores mais carregados e a comparação entre regionais](docs/img/mapa_cidade.jpg)
 
@@ -109,6 +109,7 @@ lotacao-onibus-bh/
 ├── docs/             # painel publicado no GitHub Pages
 │   ├── index.html
 │   ├── dash-shim.js  # carrega os JSON e redesenha os gráficos
+│   ├── fonts/        # fontes do painel (OFL)
 │   ├── data/
 │   └── img/
 ├── src/              # pipeline em Python
@@ -133,6 +134,8 @@ lotacao-onibus-bh/
 ## Tecnologias
 
 Python (pandas, NumPy, scikit-learn, pyproj, shapely) para o tratamento e a análise; D3.js e Canvas para a visualização; GitHub Pages para a publicação.
+
+Identidade visual: fundo preto com pontilhado, cartões grafite e escala de cor de brasa (vermelho → laranja → amarelo) para os dados. Tipografia: [Unica One](https://fonts.google.com/specimen/Unica+One) nos títulos, [Barlow](https://fonts.google.com/specimen/Barlow) no texto e [DM Mono](https://fonts.google.com/specimen/DM+Mono) nos números, todas sob a SIL Open Font License e servidas a partir de `docs/fonts/`.
 
 ## Autor
 
